@@ -86,6 +86,9 @@ fn pub tests(t: mut Tests) {
       }
       case Error(_) -> {
         # Debug:'Search failed: ${e}')
+        let _ = manager.close
+
+        cleanup_test_index(path)
         t.true(false)
       }
     }
@@ -156,19 +159,34 @@ fn pub tests(t: mut Tests) {
     # Test pagination: get first 2 results
     match manager.search('test', limit: 2, offset: 0) {
       case Ok(results) -> t.equal(results.size, 2)
-      case Error(_) -> t.true(false)
+      case Error(_) -> {
+        let _ = manager.close
+
+        cleanup_test_index(path)
+        t.true(false)
+      }
     }
 
     # Test pagination: get next 2 results (offset 2)
     match manager.search('test', limit: 2, offset: 2) {
       case Ok(results) -> t.equal(results.size, 2)
-      case Error(_) -> t.true(false)
+      case Error(_) -> {
+        let _ = manager.close
+
+        cleanup_test_index(path)
+        t.true(false)
+      }
     }
 
     # Test pagination: get last result (offset 4)
     match manager.search('test', limit: 2, offset: 4) {
       case Ok(results) -> t.equal(results.size, 1)
-      case Error(_) -> t.true(false)
+      case Error(_) -> {
+        let _ = manager.close
+
+        cleanup_test_index(path)
+        t.true(false)
+      }
     }
 
     let _ = manager.close
@@ -229,7 +247,12 @@ fn pub tests(t: mut Tests) {
     # Empty query should match all documents
     match manager.search('', limit: 10, offset: 0) {
       case Ok(results) -> t.true(results.size > 0)
-      case Error(_) -> t.true(false)
+      case Error(_) -> {
+        let _ = manager.close
+
+        cleanup_test_index(path)
+        t.true(false)
+      }
     }
 
     let _ = manager.close
@@ -293,7 +316,12 @@ fn pub tests(t: mut Tests) {
     # Search should handle special characters gracefully
     match manager.search('special', limit: 10, offset: 0) {
       case Ok(results) -> t.true(results.size > 0)
-      case Error(_) -> t.true(false)
+      case Error(_) -> {
+        let _ = manager.close
+
+        cleanup_test_index(path)
+        t.true(false)
+      }
     }
 
     let _ = manager.close
@@ -352,10 +380,20 @@ fn pub tests(t: mut Tests) {
         # Search with very large limit
         match manager.search('test', limit: 1000000, offset: 0) {
           case Ok(results) -> t.equal(results.size, 5)
-          case Error(_) -> t.true(false)
+          case Error(_) -> {
+            let _ = manager.close
+
+            cleanup_test_index(path)
+            t.true(false)
+          }
         }
       }
-      case Error(_) -> t.true(false)
+      case Error(_) -> {
+        let _ = manager.close
+
+        cleanup_test_index(path)
+        t.true(false)
+      }
     }
 
     let _ = manager.close
@@ -406,10 +444,20 @@ fn pub tests(t: mut Tests) {
         # Search with offset 0
         match manager.search('test', limit: 10, offset: 0) {
           case Ok(results) -> t.true(results.size > 0)
-          case Error(_) -> t.true(false)
+          case Error(_) -> {
+            let _ = manager.close
+
+            cleanup_test_index(path)
+            t.true(false)
+          }
         }
       }
-      case Error(_) -> t.true(false)
+      case Error(_) -> {
+        let _ = manager.close
+
+        cleanup_test_index(path)
+        t.true(false)
+      }
     }
 
     let _ = manager.close
@@ -460,10 +508,20 @@ fn pub tests(t: mut Tests) {
         # Search with MAX_SEARCH_LIMIT (10000)
         match manager.search('test', limit: 10000, offset: 0) {
           case Ok(results) -> t.true(results.size > 0)
-          case Error(_) -> t.true(false)
+          case Error(_) -> {
+            let _ = manager.close
+
+            cleanup_test_index(path)
+            t.true(false)
+          }
         }
       }
-      case Error(_) -> t.true(false)
+      case Error(_) -> {
+        let _ = manager.close
+
+        cleanup_test_index(path)
+        t.true(false)
+      }
     }
 
     let _ = manager.close
@@ -524,7 +582,12 @@ fn pub tests(t: mut Tests) {
           }
         }
       }
-      case Error(_) -> t.true(false)
+      case Error(_) -> {
+        let _ = manager.close
+
+        cleanup_test_index(path)
+        t.true(false)
+      }
     }
 
     let _ = manager.close

@@ -58,16 +58,36 @@ fn pub tests(t: mut Tests) {
                       }
                     }
                   }
-                  case Error(_) -> t.true(false)
+                  case Error(_) -> {
+                    let _ = manager.close
+
+                    cleanup_test_index(path)
+                    t.true(false)
+                  }
                 }
               }
-              case Error(_) -> t.true(false)
+              case Error(_) -> {
+                let _ = manager.close
+
+                cleanup_test_index(path)
+                t.true(false)
+              }
             }
           }
-          case Error(_) -> t.true(false)
+          case Error(_) -> {
+            let _ = manager.close
+
+            cleanup_test_index(path)
+            t.true(false)
+          }
         }
       }
-      case Error(_) -> t.true(false)
+      case Error(_) -> {
+        let _ = manager.close
+
+        cleanup_test_index(path)
+        t.true(false)
+      }
     }
 
     let _ = manager.close
@@ -90,12 +110,10 @@ fn pub tests(t: mut Tests) {
     match manager.open {
       case Ok(_) -> {}
       case Error(_) -> {
-        t.true(false)
-
         let _ = manager.close
 
         cleanup_test_index(path)
-        return
+        t.true(false)
       }
     }
 
@@ -110,6 +128,10 @@ fn pub tests(t: mut Tests) {
         case Ok(_) -> {}
         case Error(_) -> {
           t.true(false)
+
+          let _ = manager.close
+
+          cleanup_test_index(path)
 
           let _ = manager.close
 
@@ -129,6 +151,10 @@ fn pub tests(t: mut Tests) {
         let _ = manager.close
 
         cleanup_test_index(path)
+
+        let _ = manager.close
+
+        cleanup_test_index(path)
         return
       }
     }
@@ -142,21 +168,39 @@ fn pub tests(t: mut Tests) {
 
         match docs.get(0) {
           case Ok(d) -> t.true(d.contains?('Document 0'))
-          case Error(_) -> t.true(false)
+          case Error(_) -> {
+            let _ = manager.close
+
+            cleanup_test_index(path)
+            t.true(false)
+          }
         }
 
         match docs.get(1) {
           case Ok(d) -> t.true(d.contains?('Document 1'))
-          case Error(_) -> t.true(false)
+          case Error(_) -> {
+            let _ = manager.close
+
+            cleanup_test_index(path)
+            t.true(false)
+          }
         }
 
         match docs.get(2) {
           case Ok(d) -> t.true(d.contains?('Document 2'))
-          case Error(_) -> t.true(false)
+          case Error(_) -> {
+            let _ = manager.close
+
+            cleanup_test_index(path)
+            t.true(false)
+          }
         }
       }
       case Error(_) -> {
         # Debug:'Get docs failed: ${e}')
+        let _ = manager.close
+
+        cleanup_test_index(path)
         t.true(false)
       }
     }
@@ -191,6 +235,10 @@ fn pub tests(t: mut Tests) {
             let _ = manager.close
 
             cleanup_test_index(path)
+
+            let _ = manager.close
+
+            cleanup_test_index(path)
             return
           }
         }
@@ -203,6 +251,10 @@ fn pub tests(t: mut Tests) {
             let _ = manager.close
 
             cleanup_test_index(path)
+
+            let _ = manager.close
+
+            cleanup_test_index(path)
             return
           }
         }
@@ -210,10 +262,20 @@ fn pub tests(t: mut Tests) {
         # Get empty array of documents
         match manager.get_docs([]) {
           case Ok(docs) -> t.equal(docs.size, 0)
-          case Error(_) -> t.true(false)
+          case Error(_) -> {
+            let _ = manager.close
+
+            cleanup_test_index(path)
+            t.true(false)
+          }
         }
       }
-      case Error(_) -> t.true(false)
+      case Error(_) -> {
+        let _ = manager.close
+
+        cleanup_test_index(path)
+        t.true(false)
+      }
     }
 
     let _ = manager.close
@@ -244,12 +306,22 @@ fn pub tests(t: mut Tests) {
 
         match manager.add_docs_batch(docs) {
           case Ok(count) -> t.equal(count, 3)
-          case Error(_) -> t.true(false)
+          case Error(_) -> {
+            let _ = manager.close
+
+            cleanup_test_index(path)
+            t.true(false)
+          }
         }
 
         match manager.commit {
           case Ok(_) -> {}
-          case Error(_) -> t.true(false)
+          case Error(_) -> {
+            let _ = manager.close
+
+            cleanup_test_index(path)
+            t.true(false)
+          }
         }
 
         # Verify all documents are indexed
@@ -259,23 +331,48 @@ fn pub tests(t: mut Tests) {
 
             match docs.get(0) {
               case Ok(v) -> t.true(v != '')
-              case Error(_) -> t.true(false)
+              case Error(_) -> {
+                let _ = manager.close
+
+                cleanup_test_index(path)
+                t.true(false)
+              }
             }
 
             match docs.get(1) {
               case Ok(v) -> t.true(v != '')
-              case Error(_) -> t.true(false)
+              case Error(_) -> {
+                let _ = manager.close
+
+                cleanup_test_index(path)
+                t.true(false)
+              }
             }
 
             match docs.get(2) {
               case Ok(v) -> t.true(v != '')
-              case Error(_) -> t.true(false)
+              case Error(_) -> {
+                let _ = manager.close
+
+                cleanup_test_index(path)
+                t.true(false)
+              }
             }
           }
-          case Error(_) -> t.true(false)
+          case Error(_) -> {
+            let _ = manager.close
+
+            cleanup_test_index(path)
+            t.true(false)
+          }
         }
       }
-      case Error(_) -> t.true(false)
+      case Error(_) -> {
+        let _ = manager.close
+
+        cleanup_test_index(path)
+        t.true(false)
+      }
     }
 
     let _ = manager.close
@@ -301,10 +398,20 @@ fn pub tests(t: mut Tests) {
 
         match manager.add_docs_batch(docs) {
           case Ok(count) -> t.equal(count, 0)
-          case Error(_) -> t.true(false)
+          case Error(_) -> {
+            let _ = manager.close
+
+            cleanup_test_index(path)
+            t.true(false)
+          }
         }
       }
-      case Error(_) -> t.true(false)
+      case Error(_) -> {
+        let _ = manager.close
+
+        cleanup_test_index(path)
+        t.true(false)
+      }
     }
 
     let _ = manager.close
@@ -330,20 +437,40 @@ fn pub tests(t: mut Tests) {
 
         match manager.add_docs_batch(docs) {
           case Ok(count) -> t.equal(count, 1)
-          case Error(_) -> t.true(false)
+          case Error(_) -> {
+            let _ = manager.close
+
+            cleanup_test_index(path)
+            t.true(false)
+          }
         }
 
         match manager.commit {
           case Ok(_) -> {}
-          case Error(_) -> t.true(false)
+          case Error(_) -> {
+            let _ = manager.close
+
+            cleanup_test_index(path)
+            t.true(false)
+          }
         }
 
         match manager.get_doc('single') {
           case Ok(doc) -> t.true(doc.contains?('Single'))
-          case Error(_) -> t.true(false)
+          case Error(_) -> {
+            let _ = manager.close
+
+            cleanup_test_index(path)
+            t.true(false)
+          }
         }
       }
-      case Error(_) -> t.true(false)
+      case Error(_) -> {
+        let _ = manager.close
+
+        cleanup_test_index(path)
+        t.true(false)
+      }
     }
 
     let _ = manager.close
@@ -380,21 +507,41 @@ fn pub tests(t: mut Tests) {
 
         match manager.add_docs_batch(docs) {
           case Ok(count) -> t.equal(count, 100)
-          case Error(_) -> t.true(false)
+          case Error(_) -> {
+            let _ = manager.close
+
+            cleanup_test_index(path)
+            t.true(false)
+          }
         }
 
         match manager.commit {
           case Ok(_) -> {}
-          case Error(_) -> t.true(false)
+          case Error(_) -> {
+            let _ = manager.close
+
+            cleanup_test_index(path)
+            t.true(false)
+          }
         }
 
         # Search should return results
         match manager.search('Test', limit: 50, offset: 0) {
           case Ok(results) -> t.equal(results.size, 50)
-          case Error(_) -> t.true(false)
+          case Error(_) -> {
+            let _ = manager.close
+
+            cleanup_test_index(path)
+            t.true(false)
+          }
         }
       }
-      case Error(_) -> t.true(false)
+      case Error(_) -> {
+        let _ = manager.close
+
+        cleanup_test_index(path)
+        t.true(false)
+      }
     }
 
     let _ = manager.close

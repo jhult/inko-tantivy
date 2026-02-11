@@ -98,6 +98,9 @@ fn pub tests(t: mut Tests) {
       case Ok(_) -> t.true(true)
       case Error(_) -> {
         # Debug:'Failed to add document: ${e}')
+        let _ = manager.close
+
+        cleanup_test_index(path)
         t.true(false)
       }
     }
@@ -107,6 +110,9 @@ fn pub tests(t: mut Tests) {
       case Ok(_) -> t.true(true)
       case Error(_) -> {
         # Debug:'Failed to commit: ${e}')
+        let _ = manager.close
+
+        cleanup_test_index(path)
         t.true(false)
       }
     }
@@ -119,6 +125,9 @@ fn pub tests(t: mut Tests) {
       }
       case Error(_) -> {
         # Debug:'Failed to get document: ${e}')
+        let _ = manager.close
+
+        cleanup_test_index(path)
         t.true(false)
       }
     }
@@ -258,53 +267,85 @@ fn pub tests(t: mut Tests) {
     # Test operations fail with appropriate error
     match manager.add_doc('test', []) {
       case Error(_) -> t.true(true)
-      case Ok(_) -> t.true(false)
+      case Ok(_) -> {
+        cleanup_test_index(path)
+        t.true(false)
+      }
     }
 
     match manager.search('test', 10, 0) {
       case Error(_) -> t.true(true)
-      case Ok(_) -> t.true(false)
+      case Ok(_) -> {
+        cleanup_test_index(path)
+        t.true(false)
+      }
     }
 
     match manager.get_doc('test') {
       case Error(_) -> t.true(true)
-      case Ok(_) -> t.true(false)
+      case Ok(_) -> {
+        cleanup_test_index(path)
+        t.true(false)
+      }
     }
 
     match manager.commit {
       case Error(_) -> t.true(true)
-      case Ok(_) -> t.true(false)
+      case Ok(_) -> {
+        cleanup_test_index(path)
+        t.true(false)
+      }
     }
 
     match manager.rollback {
       case Error(_) -> t.true(true)
-      case Ok(_) -> t.true(false)
+      case Ok(_) -> {
+        cleanup_test_index(path)
+        t.true(false)
+      }
     }
 
     match manager.delete_doc('test') {
       case Error(_) -> t.true(true)
-      case Ok(_) -> t.true(false)
+      case Ok(_) -> {
+        cleanup_test_index(path)
+        t.true(false)
+      }
     }
 
     match manager.aggregate_terms('field', '*', 10) {
       case Error(_) -> t.true(true)
-      case Ok(_) -> t.true(false)
+      case Ok(_) -> {
+        cleanup_test_index(path)
+        t.true(false)
+      }
     }
 
     match manager.get_facet_counts('field', '*') {
       case Error(_) -> t.true(true)
-      case Ok(_) -> t.true(false)
+      case Ok(_) -> {
+        cleanup_test_index(path)
+        t.true(false)
+      }
     }
 
     match manager.autocomplete('field', 'prefix', 10) {
       case Error(_) -> t.true(true)
-      case Ok(_) -> t.true(false)
+      case Ok(_) -> {
+        cleanup_test_index(path)
+        t.true(false)
+      }
     }
 
     match manager.did_you_mean('field', 'term', 1, 10) {
       case Error(_) -> t.true(true)
-      case Ok(_) -> t.true(false)
+      case Ok(_) -> {
+        cleanup_test_index(path)
+        t.true(false)
+      }
     }
+
+    cleanup_test_index(path)
   })
 
   t.test('is_open returns correct state', fn (t) {
@@ -333,10 +374,22 @@ fn pub tests(t: mut Tests) {
             # Should not be open
             t.false(manager.is_open)
           }
-          case Error(_) -> t.true(false)
+          case Error(_) -> {
+            let _ = manager.close
+
+            cleanup_test_index(path)
+            t.true(false)
+          }
         }
       }
-      case Error(_) -> t.true(false)
+      case Error(_) -> {
+        let _ = manager.close
+
+        cleanup_test_index(path)
+        t.true(false)
+      }
     }
+
+    cleanup_test_index(path)
   })
 }

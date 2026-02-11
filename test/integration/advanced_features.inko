@@ -77,10 +77,20 @@ fn pub tests(t: mut Tests) {
             t.equal(inbox_count, 2)
             t.equal(sent_count, 2)
           }
-          case Error(_) -> t.true(false)
+          case Error(_) -> {
+            let _ = manager.close
+
+            cleanup_test_index(path)
+            t.true(false)
+          }
         }
       }
-      case Error(_) -> t.true(false)
+      case Error(_) -> {
+        let _ = manager.close
+
+        cleanup_test_index(path)
+        t.true(false)
+      }
     }
 
     let _ = manager.close
@@ -156,10 +166,20 @@ fn pub tests(t: mut Tests) {
             t.equal(unread_count, 3)
             t.equal(read_count, 2)
           }
-          case Error(_) -> t.true(false)
+          case Error(_) -> {
+            let _ = manager.close
+
+            cleanup_test_index(path)
+            t.true(false)
+          }
         }
       }
-      case Error(_) -> t.true(false)
+      case Error(_) -> {
+        let _ = manager.close
+
+        cleanup_test_index(path)
+        t.true(false)
+      }
     }
 
     let _ = manager.close
@@ -233,10 +253,20 @@ fn pub tests(t: mut Tests) {
             # Should have exactly 5 unread emails across folders
             t.equal(total, 5)
           }
-          case Error(_) -> t.true(false)
+          case Error(_) -> {
+            let _ = manager.close
+
+            cleanup_test_index(path)
+            t.true(false)
+          }
         }
       }
-      case Error(_) -> t.true(false)
+      case Error(_) -> {
+        let _ = manager.close
+
+        cleanup_test_index(path)
+        t.true(false)
+      }
     }
 
     let _ = manager.close
@@ -312,10 +342,20 @@ fn pub tests(t: mut Tests) {
 
             t.true(found_meeting)
           }
-          case Error(_) -> t.true(false)
+          case Error(_) -> {
+            let _ = manager.close
+
+            cleanup_test_index(path)
+            t.true(false)
+          }
         }
       }
-      case Error(_) -> t.true(false)
+      case Error(_) -> {
+        let _ = manager.close
+
+        cleanup_test_index(path)
+        t.true(false)
+      }
     }
 
     let _ = manager.close
@@ -366,10 +406,20 @@ fn pub tests(t: mut Tests) {
         # Search for prefix that doesn't exist
         match manager.autocomplete('subject', 'xyz', 10) {
           case Ok(suggestions) -> t.equal(suggestions.size, 0)
-          case Error(_) -> t.true(false)
+          case Error(_) -> {
+            let _ = manager.close
+
+            cleanup_test_index(path)
+            t.true(false)
+          }
         }
       }
-      case Error(_) -> t.true(false)
+      case Error(_) -> {
+        let _ = manager.close
+
+        cleanup_test_index(path)
+        t.true(false)
+      }
     }
 
     let _ = manager.close
@@ -445,10 +495,20 @@ fn pub tests(t: mut Tests) {
 
             t.true(found_electronic)
           }
-          case Error(_) -> t.true(false)
+          case Error(_) -> {
+            let _ = manager.close
+
+            cleanup_test_index(path)
+            t.true(false)
+          }
         }
       }
-      case Error(_) -> t.true(false)
+      case Error(_) -> {
+        let _ = manager.close
+
+        cleanup_test_index(path)
+        t.true(false)
+      }
     }
 
     let _ = manager.close
@@ -510,7 +570,12 @@ fn pub tests(t: mut Tests) {
 
             t.true(found_exact)
           }
-          case Error(_) -> t.true(false)
+          case Error(_) -> {
+            let _ = manager.close
+
+            cleanup_test_index(path)
+            t.true(false)
+          }
         }
 
         # Distance 2: should allow for typos
@@ -518,10 +583,20 @@ fn pub tests(t: mut Tests) {
           manager.did_you_mean('subject', 'projct', distance: 2, limit: 10)
         {
           case Ok(suggestions) -> t.true(suggestions.size > 0)
-          case Error(_) -> t.true(false)
+          case Error(_) -> {
+            let _ = manager.close
+
+            cleanup_test_index(path)
+            t.true(false)
+          }
         }
       }
-      case Error(_) -> t.true(false)
+      case Error(_) -> {
+        let _ = manager.close
+
+        cleanup_test_index(path)
+        t.true(false)
+      }
     }
 
     let _ = manager.close

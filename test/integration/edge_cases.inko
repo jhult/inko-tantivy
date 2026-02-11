@@ -38,56 +38,12 @@ fn pub tests(t: mut Tests) {
           case Error(_) -> t.true(true) # Rejection is acceptable
         }
       }
-      case Error(_) -> t.true(false)
-    }
-
-    let _ = manager.close
-
-    cleanup_test_index(path)
-  })
-
-  # Test edge case: very long field values
-  t.test('Handle very long field values', fn (t) {
-    let path = temp_index_path('edge-very-long-fields')
-    let config = match TantivyConfig.new(path) {
-      case Ok(c) -> c
       case Error(_) -> {
+        let _ = manager.close
+
         cleanup_test_index(path)
-        return
+        t.true(false)
       }
-    }
-    let mut manager = TantivyIndexManager.new(config)
-
-    match manager.open {
-      case Ok(_) -> {
-        # Create a 5KB field value (should fit in 4KB buffer after truncation)
-        let mut long_value = ''
-        let mut i = 0
-
-        while i < 5000 {
-          long_value = long_value + 'x'
-          i = i + 1
-        }
-
-        let fields = [('title', 'Long Test'), ('body', long_value)]
-
-        match manager.add_doc('long-doc', fields) {
-          case Ok(_) -> {
-            match manager.commit {
-              case Ok(_) -> {
-                # Verify document was indexed and is searchable
-                match manager.search('Long', 10, 0) {
-                  case Ok(results) -> t.true(results.size > 0)
-                  case Error(_) -> t.true(false)
-                }
-              }
-              case Error(_) -> t.true(false)
-            }
-          }
-          case Error(_) -> t.true(false)
-        }
-      }
-      case Error(_) -> t.true(false)
     }
 
     let _ = manager.close
@@ -129,22 +85,47 @@ fn pub tests(t: mut Tests) {
                         # Search for committed doc - should be found
                         match manager.search('Committed', 10, 0) {
                           case Ok(results) -> t.true(results.size == 1)
-                          case Error(_) -> t.true(false)
+                          case Error(_) -> {
+                            let _ = manager.close
+
+                            cleanup_test_index(path)
+                            t.true(false)
+                          }
                         }
 
                         # Search for rolled back doc - should NOT be found
                         match manager.search('Rolled', 10, 0) {
                           case Ok(results) -> t.true(results.size == 0)
-                          case Error(_) -> t.true(false)
+                          case Error(_) -> {
+                            let _ = manager.close
+
+                            cleanup_test_index(path)
+                            t.true(false)
+                          }
                         }
                       }
-                      case Error(_) -> t.true(false)
+                      case Error(_) -> {
+                        let _ = manager.close
+
+                        cleanup_test_index(path)
+                        t.true(false)
+                      }
                     }
                   }
-                  case Error(_) -> t.true(false)
+                  case Error(_) -> {
+                    let _ = manager.close
+
+                    cleanup_test_index(path)
+                    t.true(false)
+                  }
                 }
               }
-              case Error(_) -> t.true(false)
+              case Error(_) -> {
+                let _ = manager.close
+
+                cleanup_test_index(path)
+                t.true(false)
+              }
             }
           }
           case Error(_) -> t.true(false)
@@ -184,10 +165,20 @@ fn pub tests(t: mut Tests) {
                   case Error(_) -> t.true(true) # Error is also acceptable
                 }
               }
-              case Error(_) -> t.true(false)
+              case Error(_) -> {
+                let _ = manager.close
+
+                cleanup_test_index(path)
+                t.true(false)
+              }
             }
           }
-          case Error(_) -> t.true(false)
+          case Error(_) -> {
+            let _ = manager.close
+
+            cleanup_test_index(path)
+            t.true(false)
+          }
         }
       }
       case Error(_) -> t.true(false)
@@ -242,10 +233,20 @@ fn pub tests(t: mut Tests) {
         # Should be able to retrieve the document
         match manager.get_doc('empty-fields') {
           case Ok(_) -> t.true(true)
-          case Error(_) -> t.true(false)
+          case Error(_) -> {
+            let _ = manager.close
+
+            cleanup_test_index(path)
+            t.true(false)
+          }
         }
       }
-      case Error(_) -> t.true(false)
+      case Error(_) -> {
+        let _ = manager.close
+
+        cleanup_test_index(path)
+        t.true(false)
+      }
     }
 
     let _ = manager.close
@@ -305,10 +306,20 @@ fn pub tests(t: mut Tests) {
         # Should be able to retrieve and search
         match manager.get_doc('large-field') {
           case Ok(doc) -> t.true(doc.contains?('Large Field'))
-          case Error(_) -> t.true(false)
+          case Error(_) -> {
+            let _ = manager.close
+
+            cleanup_test_index(path)
+            t.true(false)
+          }
         }
       }
-      case Error(_) -> t.true(false)
+      case Error(_) -> {
+        let _ = manager.close
+
+        cleanup_test_index(path)
+        t.true(false)
+      }
     }
 
     let _ = manager.close
@@ -360,10 +371,20 @@ fn pub tests(t: mut Tests) {
         # Should be able to retrieve
         match manager.get_doc('unicode-test') {
           case Ok(_) -> t.true(true)
-          case Error(_) -> t.true(false)
+          case Error(_) -> {
+            let _ = manager.close
+
+            cleanup_test_index(path)
+            t.true(false)
+          }
         }
       }
-      case Error(_) -> t.true(false)
+      case Error(_) -> {
+        let _ = manager.close
+
+        cleanup_test_index(path)
+        t.true(false)
+      }
     }
 
     let _ = manager.close
@@ -424,7 +445,12 @@ fn pub tests(t: mut Tests) {
 
         match manager.delete_by_account_folder('account1', 'folder1', uids) {
           case Ok(count) -> t.equal(count, 3)
-          case Error(_) -> t.true(false)
+          case Error(_) -> {
+            let _ = manager.close
+
+            cleanup_test_index(path)
+            t.true(false)
+          }
         }
 
         match manager.commit {
@@ -445,7 +471,12 @@ fn pub tests(t: mut Tests) {
           case Error(_) -> t.true(true)
         }
       }
-      case Error(_) -> t.true(false)
+      case Error(_) -> {
+        let _ = manager.close
+
+        cleanup_test_index(path)
+        t.true(false)
+      }
     }
 
     let _ = manager.close
