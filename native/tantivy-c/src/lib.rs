@@ -652,12 +652,27 @@ pub unsafe extern "C" fn tantivy_index_open(
         }
     };
 
-    // Create or open index
-    let index = match Index::create_in_dir(&Path::new(&index_path), schema.clone()) {
-        Ok(idx) => idx,
-        Err(e) => {
-            *error_out = create_error_string(&format!("Failed to create index: {}", e));
+    // Create directory if it doesn't exist
+    let path = Path::new(&index_path);
+    if !path.exists() {
+        if let Err(e) = std::fs::create_dir_all(&path) {
+            *error_out = create_error_string(&format!("Failed to create directory: {}", e));
             return std::ptr::null_mut();
+        }
+    }
+
+    // Open or create index
+    let index = match Index::open_in_dir(&path) {
+        Ok(idx) => idx,
+        Err(_) => {
+            // If opening failed, try creating a new index
+            match Index::create_in_dir(&path, schema.clone()) {
+                Ok(idx) => idx,
+                Err(e) => {
+                    *error_out = create_error_string(&format!("Failed to create index: {}", e));
+                    return std::ptr::null_mut();
+                }
+            }
         }
     };
 
