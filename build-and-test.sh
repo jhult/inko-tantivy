@@ -3,7 +3,6 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-
 set -o errexit
 set -o nounset
 set -o pipefail
@@ -64,7 +63,10 @@ main() {
 	echo "Running Inko tests..."
 
 	# Set library search path for the linker
-	export LIBRARY_PATH="${SCRIPT_DIR}:${LIBRARY_PATH:-}"
+	export LIBRARY_PATH="${SCRIPT_DIR}/native/tantivy-c/target/release:${LIBRARY_PATH:-}"
+
+	# Set dynamic library path for macOS runtime
+	export DYLD_LIBRARY_PATH="${SCRIPT_DIR}/native/tantivy-c/target/release:${DYLD_LIBRARY_PATH:-}"
 
 	inko test
 
