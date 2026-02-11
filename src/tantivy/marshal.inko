@@ -7,7 +7,6 @@
 # This module provides helper functions for converting between Inko and C types,
 # handling string marshaling, and managing memory buffers for FFI operations.
 
-import buffer_pool (get_string_buffer, return_string_buffer)
 import pointer_helpers (pointer_offset, pointer_to_int, read_usize, write_usize)
 import std.bytes (ByteArray)
 import std.string (StringBuffer)
@@ -49,15 +48,15 @@ fn pub copy_bytes(from: ref ByteArray, to: mut ByteArray) {
   for (i, byte) in from.bytes.with_index { let _ = to.set(i, byte) }
 }
 
-# Convert Inko string to null-terminated C string buffer using buffer pool
-fn pub string_to_c_buffer(s: String) -> ByteArray {
-  get_string_buffer(s.size + 1)
+# Get pointer to Inko string for passing to C
+# Inko strings are immutable and already NULL-terminated, so we can pass
+# the internal pointer directly without copying
+fn pub string_to_c_buffer(s: String) -> String {
+  s
 }
 
-# Release string buffer back to pool (call after FFI operation completes)
-fn pub release_string_buffer(buffer: ByteArray) {
-  return_string_buffer(buffer)
-}
+# No-op for string_to_c_buffer - strings are passed by reference
+fn pub release_string_buffer(buffer: String) {}
 
 # Helper: Read a string field from a C struct at given offset
 # Handles null pointer check and conversion
@@ -111,33 +110,33 @@ fn pub read_optional_string_field(
   }
 }
 
-# Helper: Create field array for document indexing using buffer pool
-fn pub create_field_array(fields: Array[(String, String)]) -> ByteArray {
+# Helper: Create field array for document indexing
+# Returns (ByteArray, Array[String]) where the array keeps strings alive during FFI call
+fn pub create_field_array(fields: Array[(String, String)]) -> (ByteArray, Array[String]) {
   let array_size = fields.size * FIELD_SIZE
   let buf = ByteArray.filled(with: 0, times: array_size)
-
+  let mut strings = []
   let mut i = 0
 
   for (key, value) in fields {
-    let key_buf = get_string_buffer(key.size + 1)
-    let value_buf = get_string_buffer(value.size + 1)
-
     let base_offset = i * FIELD_SIZE
 
     write_usize(
       pointer_offset(buf.pointer, base_offset),
-      pointer_to_int(key_buf.pointer),
+      pointer_to_int(key.pointer),
     )
 
     write_usize(
       pointer_offset(buf.pointer, base_offset + FIELD_OFFSET_VALUE),
-      pointer_to_int(value_buf.pointer),
+      pointer_to_int(value.pointer),
     )
 
+    strings.push(key)
+    strings.push(value)
     i = i + 1
   }
 
-  buf
+  (buf, strings)
 }
 
 # Helper: Convert C pointer to String (reads until null terminator)
