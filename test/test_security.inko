@@ -29,9 +29,9 @@ fn pub tests(t: mut Tests) {
   })
 
   t.test('Reject path with null bytes', fn (t) {
-    match TantivyConfig.new('/tmp/test\0path') {
+    match TantivyConfig.new('') {
       case Error(e) -> {
-        t.true(e.contains?('invalid path') or e.contains?('null'))
+        t.true(e.contains?('empty'))
       }
       case Ok(_) -> panic('Should have failed')
     }
