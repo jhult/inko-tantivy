@@ -1,0 +1,24 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+[package]
+name = "tantivy-c"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "tantivy_c"
+crate-type = ["cdylib"]
+
+[dependencies]
+tantivy = "^0.25"
+libc = "^0.2.181"
+regex = "1.12"
+
+[dependencies.serde]
+version = "1.0"
+features = ["derive"]
+
+[dependencies.serde_json]
+version = "1.0"

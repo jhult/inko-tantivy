@@ -1,0 +1,166 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+#
+# Resource limit validation tests
+# These tests verify the security limits defined in lib.rs:32-35
+
+import std.test (Tests)
+import tantivy.index_manager (TantivyConfig, TantivyIndexManager)
+import helpers (cleanup_test_index, ffi_available, temp_index_path)
+
+fn pub tests(t: mut Tests) {
+  # Only run integration tests if FFI is available
+  if !ffi_available { return }
+
+  # Test resource limit edge cases
+  # These tests verify the security limits defined in lib.rs:32-35
+
+  t.test('Document with 1000 fields succeeds', fn (t) {
+    let path = temp_index_path("validation-001")
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> return
+    }
+    let mut manager = TantivyIndexManager.new(config)
+
+    match manager.open {
+      case Ok(_) -> {
+        # Create a document with 1000 fields (MAX_FIELDS_PER_DOCUMENT)
+        let mut fields = []
+
+        let mut i = 0
+
+        while i < 1000 {
+          fields.push(('field-${i}', 'value'))
+          i = i + 1
+        }
+
+        match manager.add_doc('max-fields', fields) {
+          case Ok(_) -> t.true(true)
+          case Error(_) -> t.true(false)
+        }
+      }
+      case Error(_) -> t.true(false)
+    }
+
+    let _ = manager.close
+
+    cleanup_test_index(path)
+  })
+
+  t.test('Document with 1001 fields fails', fn (t) {
+    let path = temp_index_path("validation-002")
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> return
+    }
+    let mut manager = TantivyIndexManager.new(config)
+
+    match manager.open {
+      case Ok(_) -> {
+        # Create a document with 1001 fields (MAX_FIELDS_PER_DOCUMENT + 1)
+        let mut fields = []
+
+        let mut i = 0
+
+        while i < 1001 {
+          fields.push(('field-${i}', 'value'))
+          i = i + 1
+        }
+
+        match manager.add_doc('too-many-fields', fields) {
+          case Ok(_) -> t.true(false)
+          case Error(e) -> {
+            # Error should mention the limit
+            t.true(
+              e.contains?('1000')
+                or e.contains?('fields')
+                or e.contains?('Too many'),
+            )
+          }
+        }
+      }
+      case Error(_) -> t.true(false)
+    }
+
+    let _ = manager.close
+
+    cleanup_test_index(path)
+  })
+
+  t.test('Field value at 10MB succeeds', fn (t) {
+    let path = temp_index_path("validation-003")
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> return
+    }
+    let mut manager = TantivyIndexManager.new(config)
+
+    match manager.open {
+      case Ok(_) -> {
+        # Create a 10MB field value (MAX_FIELD_VALUE_LENGTH)
+        let mut large_value = ''
+        let mut i = 0
+
+        while i < 10_000_000 {
+          large_value = large_value + 'x'
+          i = i + 1
+        }
+
+        let fields = [('large_field', large_value)]
+
+        match manager.add_doc('max-value', fields) {
+          case Ok(_) -> t.true(true)
+          case Error(_) -> t.true(false)
+        }
+      }
+      case Error(_) -> t.true(false)
+    }
+
+    let _ = manager.close
+
+    cleanup_test_index(path)
+  })
+
+  t.test('Field value over 10MB fails', fn (t) {
+    let path = temp_index_path("validation-004")
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> return
+    }
+    let mut manager = TantivyIndexManager.new(config)
+
+    match manager.open {
+      case Ok(_) -> {
+        # Create a 10MB + 1 byte field value (MAX_FIELD_VALUE_LENGTH + 1)
+        let mut large_value = ''
+        let mut i = 0
+
+        while i < 10_000_001 {
+          large_value = large_value + 'x'
+          i = i + 1
+        }
+
+        let fields = [('too_large_field', large_value)]
+
+        match manager.add_doc('too-large-value', fields) {
+          case Ok(_) -> t.true(false)
+          case Error(e) -> {
+            # Error should mention the limit
+            t.true(
+              e.contains?('10')
+                or e.contains?('bytes')
+                or e.contains?('too large'),
+            )
+          }
+        }
+      }
+      case Error(_) -> t.true(false)
+    }
+
+    let _ = manager.close
+
+    cleanup_test_index(path)
+  })
+}

@@ -1,0 +1,257 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+---
+name: CI
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+    branches:
+      - main
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  security-audit:
+    name: Rust Security Audit
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/rust-cross/cargo-zigbuild:0.21.4
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Cache Cargo registry
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306
+        with:
+          path: /github/home/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('native/tantivy-c/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-registry-
+
+      - name: Cache Cargo index
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306
+        with:
+          path: /github/home/.cargo/git
+          key: ${{ runner.os }}-cargo-index-${{ hashFiles('native/tantivy-c/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-index-
+
+      - name: Cache Cargo build
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306
+        with:
+          path: native/tantivy-c/target
+          key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('native/tantivy-c/**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-build-target-
+
+      - name: Install cargo-audit
+        run: |
+          cargo install cargo-audit
+
+      - name: Run cargo-audit
+        working-directory: native/tantivy-c
+        run: |
+          cargo audit
+
+  license-check:
+    name: License Header Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Check License Headers
+        uses: apache/skywalking-eyes/header@main
+        with:
+          config: .licenserc.yaml
+
+  check-and-test-inko:
+    name: Check and Test Inko (${{ matrix.os }})
+    runs-on: ${{ matrix.runner }}
+    needs: [security-audit, license-check, build-native]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: linux
+            runner: ubuntu-latest
+            artifact: linux_x64
+            lib_file: linux_x64_tantivy_c.so
+            lib_name: libtantivy_c.so
+            use_container: true
+          - os: macos
+            runner: macos-latest
+            artifact: macos_arm64
+            lib_file: macos_arm64_tantivy_c.dylib
+            lib_name: libtantivy_c.dylib
+            use_container: false
+          - os: windows
+            runner: windows-latest
+            artifact: windows_x64
+            lib_file: windows_x64_tantivy_c.dll
+            lib_name: tantivy_c.dll
+            use_container: false
+
+    container: ${{ matrix.use_container && 'ghcr.io/inko-lang/inko:latest' || null }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install Inko (macOS)
+        if: matrix.os == 'macos'
+        run: |
+          brew install inko
+
+      - name: Install Inko (Windows)
+        if: matrix.os == 'windows'
+        run: |
+          choco install inko
+
+      - name: Download Native Library
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: ${{ matrix.artifact }}
+
+      - name: Copy Library to Root (Unix)
+        if: matrix.os != 'windows'
+        run: |
+          cp ${{ matrix.lib_file }} ./${{ matrix.lib_name }}
+
+      - name: Copy Library to Root (Windows)
+        if: matrix.os == 'windows'
+        run: |
+          copy ${{ matrix.lib_file }} ${{ matrix.lib_name }}
+
+      - name: Check Formatting and Run Tests (Unix)
+        if: matrix.os != 'windows'
+        run: |
+          export LIBRARY_PATH=.
+          inko --version
+          inko fmt --check
+          inko test
+
+      - name: Check Formatting and Run Tests (Windows)
+        if: matrix.os == 'windows'
+        run: |
+          $env:PATH = "$pwd;$env:PATH"
+          inko --version
+          inko fmt --check
+          inko test
+
+      - name: Run Performance Benchmarks (Unix)
+        if: matrix.os != 'windows'
+        continue-on-error: true
+        run: |
+          export LIBRARY_PATH=.
+          echo "Running performance benchmarks (informational only)..."
+          ./run_benchmarks.sh || echo "Benchmarks completed with issues"
+
+      - name: Run Performance Benchmarks (Windows)
+        if: matrix.os == 'windows'
+        continue-on-error: true
+        run: |
+          $env:PATH = "$pwd;$env:PATH"
+          Write-Host "Running performance benchmarks (informational only)..."
+          bash run_benchmarks.sh
+          if ($LASTEXITCODE -ne 0) { Write-Host "Benchmarks completed with issues" }
+
+  build-native:
+    name: Build Native Library (${{ matrix.artifact_name }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    container:
+      image: ghcr.io/rust-cross/cargo-zigbuild:0.21.4
+    strategy:
+      matrix:
+        include:
+          # Linux x64
+          - target: x86_64-unknown-linux-gnu
+            artifact_name: linux_x64
+            arch: x64
+            lib_name: libtantivy_c.so
+          # Linux ARM64
+          - target: aarch64-unknown-linux-gnu
+            artifact_name: linux_arm64
+            arch: arm64
+            lib_name: libtantivy_c.so
+          # macOS x64 (Intel)
+          - target: x86_64-apple-darwin
+            artifact_name: macos_x64
+            arch: x64
+            lib_name: libtantivy_c.dylib
+          # macOS ARM64 (Apple Silicon)
+          - target: aarch64-apple-darwin
+            artifact_name: macos_arm64
+            arch: arm64
+            lib_name: libtantivy_c.dylib
+          # Windows x64
+          - target: x86_64-pc-windows-gnu
+            artifact_name: windows_x64
+            arch: x64
+            lib_name: tantivy_c.dll
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Cache Cargo registry
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+        with:
+          path: /github/home/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('native/tantivy-c/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-registry-
+
+      - name: Cache Cargo index
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+        with:
+          path: /github/home/.cargo/git
+          key: ${{ runner.os }}-cargo-index-${{ hashFiles('native/tantivy-c/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-index-
+
+      - name: Cache Cargo build
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+        with:
+          path: native/tantivy-c/target
+          key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('native/tantivy-c/**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-build-target-
+
+      - name: Build Rust cdylib
+        working-directory: native/tantivy-c
+        run: |
+          cargo zigbuild --release --target ${{ matrix.target }}
+
+      - name: Create artifact directory structure
+        working-directory: native/tantivy-c
+        shell: bash
+        run: |
+          mkdir -p release-files
+          LIB_NAME=${{ matrix.lib_name }}
+          EXT="${LIB_NAME##*.}"
+          cp target/${{ matrix.target }}/release/${{ matrix.lib_name }} "release-files/${{ matrix.artifact_name }}_tantivy_c.${EXT}"
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: ${{ matrix.artifact_name }}_tantivy_c
+          path: native/tantivy-c/release-files
+          if-no-files-found: error
+
+      - name: Upload to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2.5.0
+        with:
+          files: native/tantivy-c/release-files/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,166 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+# This Source Code Form is subject to terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+import std.test (Tests)
+import tantivy.index_manager (
+  TantivyConfig, TantivyIndexManager,
+)
+import tantivy.query_builder (TantivyQueryBuilder)
+
+fn pub tests(t: mut Tests) {
+  t.test('Repeated search operations complete successfully', fn (t) {
+    let manager = TantivyIndexManager.new(
+      match TantivyConfig.new('/tmp/test-memory-leaks-search') {
+        case Ok(c) -> c
+        case Error(_) -> {
+          t.true(false)
+          return
+        }
+      }
+    )
+
+    match manager.open {
+      case Ok(_) -> {
+        let mut i = 0
+
+        while i < 100 {
+          let fields = [
+            ('subject', 'Test email ${i}'),
+            ('from', 'user${i}@example.com'),
+            ('body', 'Test body content ${i}'),
+          ]
+
+          let _ = manager.add_doc('leak-test-${i}', fields)
+          i = i + 1
+        }
+
+        let _ = manager.commit
+
+        i = 0
+
+        while i < 500 {
+          let _ = manager.search('test', 10, 0)
+          i = i + 1
+        }
+
+        let _ = manager.close
+      }
+      case Error(_) -> {}
+    }
+  })
+
+  t.test('Repeated autocomplete operations complete successfully', fn (t) {
+    let manager = TantivyIndexManager.new(
+      match TantivyConfig.new('/tmp/test-memory-leaks-autocomplete') {
+        case Ok(c) -> c
+        case Error(_) -> {
+          t.true(false)
+          return
+        }
+      }
+    )
+
+    match manager.open {
+      case Ok(_) -> {
+        let mut i = 0
+
+        while i < 50 {
+          let fields = [
+            ('subject', 'Auto test ${i}'),
+            ('from', 'user${i}@example.com'),
+            ('body', 'Auto body ${i}'),
+          ]
+
+          let _ = manager.add_doc('auto-test-${i}', fields)
+          i = i + 1
+        }
+
+        let _ = manager.commit
+
+        i = 0
+
+        while i < 300 {
+          let _ = manager.autocomplete('subject', 'aut', 10)
+          i = i + 1
+        }
+
+        let _ = manager.close
+      }
+      case Error(_) -> {}
+    }
+  })
+
+  t.test('Index close and reopen works correctly', fn (t) {
+    let manager = TantivyIndexManager.new(
+      match TantivyConfig.new('/tmp/test-memory-leaks-reopen') {
+        case Ok(c) -> c
+        case Error(_) -> {
+          t.true(false)
+          return
+        }
+      }
+    )
+
+    match manager.open {
+      case Ok(_) -> {
+        let fields = [
+          ('subject', 'Reopen test'),
+          ('from', 'test@example.com'),
+          ('body', 'Test body'),
+        ]
+
+        let _ = manager.add_doc('reopen-doc', fields)
+        let _ = manager.commit
+        let _ = manager.search('test', 10, 0)
+        let _ = manager.close
+
+        match manager.open {
+          case Ok(_) -> {
+            let _ = manager.search('test', 10, 0)
+            let _ = manager.close
+          }
+          case Error(_) -> {}
+        }
+      }
+      case Error(_) -> {}
+    }
+  })
+
+  t.test('Repeated add_doc operations complete successfully', fn (t) {
+    let manager = TantivyIndexManager.new(
+      match TantivyConfig.new('/tmp/test-memory-leaks-add-doc') {
+        case Ok(c) -> c
+        case Error(_) -> {
+          t.true(false)
+          return
+        }
+      }
+    )
+
+    match manager.open {
+      case Ok(_) -> {
+        let mut i = 0
+
+        while i < 1000 {
+          let fields = [
+            ('subject', 'Add doc test ${i}'),
+            ('from', 'user${i}@example.com'),
+            ('body', 'Body ${i}'),
+          ]
+
+          let _ = manager.add_doc('add-test-${i}', fields)
+          i = i + 1
+        }
+
+        let _ = manager.commit
+        let _ = manager.close
+      }
+      case Error(_) -> {}
+    }
+  })
+}

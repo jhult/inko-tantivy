@@ -1,0 +1,410 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+# This Source Code Form is subject to terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+#
+# Performance benchmarks for document indexing operations
+
+import std.stdio (STDOUT)
+import std.time (Duration, Instant)
+import tantivy (TantivyConfig, TantivyIndexManager)
+
+# Benchmark statistics
+type BenchmarkStats {
+  let @name: String
+  let @iterations: Int
+  let @warmup_runs: Int
+  let @total_duration_ns: Int
+  let @durations: Array[Int]
+}
+
+impl BenchmarkStats {
+  fn pub static new(
+    name: String,
+    iterations: Int,
+    warmup_runs: Int,
+  ) -> BenchmarkStats {
+    BenchmarkStats(
+      name: name,
+      iterations: iterations,
+      warmup_runs: warmup_runs,
+      total_duration_ns: 0,
+      durations: [],
+    )
+  }
+
+  # Calculate mean (average) duration in nanoseconds
+  fn pub mean -> Int {
+    if @durations.size == 0 { return 0 }
+
+    @total_duration_ns / @durations.size
+  }
+
+  # Calculate median duration (50th percentile)
+  fn pub median -> Int {
+    if @durations.size == 0 { return 0 }
+
+    let mut sorted = @durations.clone
+    sorted.sort
+
+    let mid = sorted.size / 2
+
+    if sorted.size % 2 == 0 {
+      (sorted.get(mid).or_panic + sorted.get(mid - 1).or_panic) / 2
+    } else {
+      sorted.get(mid).or_panic
+    }
+  }
+
+  # Calculate percentile (0-100)
+  fn pub percentile(percent: Int) -> Int {
+    if @durations.size == 0 { return 0 }
+
+    if percent < 0 or percent > 100 { return mean }
+
+    let mut sorted = @durations.clone
+    sorted.sort
+    let index = (percent * (sorted.size - 1)) / 100
+
+    sorted.get(index).or_panic
+  }
+
+  # Get p95 (95th percentile)
+  fn pub p95 -> Int {
+    percentile(95)
+  }
+
+  # Get p99 (99th percentile)
+  fn pub p99 -> Int {
+    percentile(99)
+  }
+
+  # Calculate standard deviation
+  fn pub std_dev -> Float {
+    if @durations.size < 2 { return 0.0 }
+
+    let mean_val = mean as Float
+    let mut sum_sq_diff = 0.0
+
+    for d in @durations.iter {
+      let diff = d as Float - mean_val
+
+      sum_sq_diff = sum_sq_diff + (diff * diff)
+    }
+
+    (sum_sq_diff / (@durations.size - 1) as Float).sqrt
+  }
+
+  # Calculate min duration
+  fn pub min -> Int {
+    if @durations.size == 0 { return 0 }
+
+    let mut min_val = @durations.get(0).unwrap
+
+    for d in @durations.iter {
+      if d < min_val { min_val = d }
+    }
+
+    min_val
+  }
+
+  # Calculate max duration
+  fn pub max -> Int {
+    if @durations.size == 0 { return 0 }
+
+    let mut max_val = @durations.get(0).unwrap
+
+    for d in @durations.iter {
+      if d > max_val { max_val = d }
+    }
+
+    max_val
+  }
+
+  # Convert nanoseconds to milliseconds
+  fn ns_to_ms(ns: Int) -> Float {
+    ns as Float / 1_000_000.0
+  }
+
+  # Format and print results
+  fn pub print_results {
+    let mean_ns = mean
+    let median_ns = median
+    let p95_ns = p95
+    let p99_ns = p99
+    let min_ns = min
+    let max_ns = max
+    let std_dev_val = std_dev
+
+    STDOUT.new.print('')
+    STDOUT.new.print('=== ${@name} ===')
+    STDOUT.new.print('Iterations: ${@iterations}')
+    STDOUT.new.print('Warmup runs: ${@warmup_runs}')
+    STDOUT.new.print('')
+    STDOUT.new.print('Latency Statistics:')
+    STDOUT.new.print('  Mean:   ${ns_to_ms(mean_ns)}ms (${mean_ns}ns)')
+    STDOUT.new.print('  Median: ${ns_to_ms(median_ns)}ms (${median_ns}ns)')
+    STDOUT.new.print('  P95:    ${ns_to_ms(p95_ns)}ms (${p95_ns}ns)')
+    STDOUT.new.print('  P99:    ${ns_to_ms(p99_ns)}ms (${p99_ns}ns)')
+    STDOUT.new.print('  Min:    ${ns_to_ms(min_ns)}ms (${min_ns}ns)')
+    STDOUT.new.print('  Max:    ${ns_to_ms(max_ns)}ms (${max_ns}ns)')
+    STDOUT.new.print('  StdDev: ${std_dev_val}ms')
+    STDOUT.new.print('')
+    STDOUT.new.print(
+      'Throughput: ${(1_000_000_000.0 / ns_to_ms(mean_ns)).to_int} docs/sec',
+    )
+    STDOUT.new.print('')
+  }
+}
+
+
+
+# Quicksort implementation with in-place partitioning
+fn quicksort(arr: mut Array[Int], low: Int, high: Int) {
+  if low < high and low >= 0 and high >= 0 {
+    let pivot_index = partition(arr, low, high)
+
+    quicksort(arr, low, pivot_index - 1)
+    quicksort(arr, pivot_index + 1, high)
+  }
+}
+
+# Partition array around pivot element (Lomuto partition scheme)
+fn partition(arr: mut Array[Int], low: Int, high: Int) -> Int {
+  let pivot = arr.get(high).unwrap
+  let mut i = low - 1
+  let mut j = low
+
+  while j < high {
+    if arr.get(j).unwrap <= pivot {
+      i = i + 1
+
+      let temp = arr.get(i).unwrap
+
+      arr.set(i, arr.get(j).unwrap)
+      arr.set(j, temp)
+    }
+
+    j = j + 1
+  }
+
+  i = i + 1
+
+  let temp = arr.get(i).unwrap
+
+  arr.set(i, arr.get(high).unwrap)
+  arr.set(high, temp)
+  i
+}
+
+# Run a single benchmark with warmup
+fn run_benchmark[T, E](
+  name: String,
+  iterations: Int,
+  warmup_runs: Int,
+  operation: fn -> Result[T, E],
+) -> BenchmarkStats {
+  let mut stats = BenchmarkStats.new(name, iterations, warmup_runs)
+
+  STDOUT.new.print('Running: ${name}')
+  STDOUT.new.print('Warmup runs: ${warmup_runs}')
+
+  let mut i = 0
+
+  while i < warmup_runs {
+    let _ = operation()
+
+    i = i + 1
+  }
+
+  STDOUT.new.print('Benchmark runs: ${iterations}')
+  STDOUT.new.print('')
+
+  stats.total_duration_ns = 0
+
+  let mut i = 0
+
+  while i < iterations {
+    let start = Instant.new
+
+    match operation() {
+      case Ok(_) -> {}
+      case Error(e) -> STDOUT.new.print('Error during benchmark: ${e}')
+    }
+
+    let elapsed = start.elapsed.to_nanos
+
+    stats.total_duration_ns = stats.total_duration_ns + elapsed
+    stats.durations.push(elapsed)
+
+    i = i + 1
+
+    if i % 100 == 0 { STDOUT.new.print('  Progress: ${i}/${iterations}') }
+  }
+
+  stats.print_results
+  stats
+}
+
+# Setup: Create index with test data
+fn setup_index(path: String) -> TantivyIndexManager {
+  let config = TantivyConfig.new(path)
+  let manager = TantivyIndexManager.new(config)
+
+  match manager.open {
+    case Ok(_) -> {
+      let mut i = 0
+
+      while i < 1000 {
+        let fields = [
+          ('subject', 'Email about topic ${i % 10}'),
+          ('from', 'user${i % 50}@example.com'),
+          (
+            'body',
+            'Content discussing topic ${i % 10} with details about subject ${i}',
+          ),
+        ]
+
+        let _ = manager.add_doc('search-doc-${i}', fields)
+
+        i = i + 1
+      }
+
+      let _ = manager.commit
+
+      manager
+    }
+    case Error(e) -> {
+      STDOUT.new.print('Failed to setup index: ${e}')
+      manager
+    }
+  }
+}
+
+# Benchmark: Single document indexing
+fn bench_single_doc_indexing {
+  let manager = setup_index('/tmp/bench-single-doc')
+
+  run_benchmark('Single document index', 100, 5, fn {
+    let fields = [
+      ('subject', 'Test email subject'),
+      ('from', 'test@example.com'),
+      ('body', 'This is a test email body with some content'),
+    ]
+
+    manager.add_doc('bench-doc', fields)
+  })
+
+  let _ = manager.close
+}
+
+# Benchmark: Batch document indexing
+fn bench_batch_doc_indexing {
+  let manager = setup_index('/tmp/bench-batch-docs')
+
+  run_benchmark('Batch 100 documents', 10, 5, fn {
+    let mut batch = []
+    let mut i = 0
+
+    while i < 100 {
+      let doc_id = batch.size + i
+
+      batch.push(
+        (
+          'bench-doc-${doc_id}',
+          [
+            ('subject', 'Email ${doc_id}'),
+            ('from', 'user${doc_id}@example.com'),
+            ('body', 'Body content for email number ${doc_id}'),
+          ],
+        ),
+      )
+      i = i + 1
+    }
+
+    manager.add_docs_batch(batch)
+  })
+
+  let _ = manager.close
+}
+
+# Benchmark: Large document indexing
+fn bench_large_doc_indexing {
+  let manager = setup_index('/tmp/bench-large-doc')
+
+  run_benchmark('Large document (10KB)', 50, 5, fn {
+    let mut large_body = ''
+    let mut j = 0
+
+    while j < 1000 {
+      large_body = large_body
+        + 'This is a long paragraph of text that will be repeated many times. '
+
+      j = j + 1
+    }
+
+    let fields = [
+      ('subject', 'Large email test'),
+      ('from', 'test@example.com'),
+      ('body', large_body),
+    ]
+
+    manager.add_doc('large-doc', fields)
+  })
+
+  let _ = manager.close
+}
+
+fn main {
+  STDOUT.new.print('========================================')
+  STDOUT.new.print('  Indexing Benchmarks with Statistics')
+  STDOUT.new.print('========================================')
+  STDOUT.new.print('')
+  STDOUT.new.print('Methodology:')
+  STDOUT.new.print(
+    '  1. Warmup runs: Executes operation N times to warm up caches',
+  )
+  STDOUT.new.print(
+    '  2. Benchmark runs: Executes operation N times and measures each',
+  )
+  STDOUT.new.print(
+    '  3. Statistics: Calculates mean, median, p95, p99, std dev',
+  )
+  STDOUT.new.print('  4. Outliers: Min/max help identify performance anomalies')
+  STDOUT.new.print('')
+  STDOUT.new.print('Interpreting Results:')
+  STDOUT.new.print('  - Mean: Average performance across all runs')
+  STDOUT.new.print(
+    '  - Median: Typical performance (less affected by outliers)',
+  )
+  STDOUT.new.print('  - P95: 95% of runs completed faster than this')
+  STDOUT.new.print('  - P99: 99% of runs completed faster than this')
+  STDOUT.new.print(
+    '  - StdDev: Variability in performance (lower = more consistent)',
+  )
+  STDOUT.new.print('')
+  STDOUT.new.print('Regression Detection:')
+  STDOUT.new.print(
+    '  - Watch P95 and P99 for increases (indicates worst-case degradation)',
+  )
+  STDOUT.new.print(
+    '  - Watch median for increases (indicates typical performance)',
+  )
+  STDOUT.new.print(
+    '  - Compare std_dev across versions (higher = more variability)',
+  )
+  STDOUT.new.print('')
+  STDOUT.new.print('========================================')
+  STDOUT.new.print('')
+
+  bench_single_doc_indexing
+  bench_batch_doc_indexing
+  bench_large_doc_indexing
+
+  STDOUT.new.print('========================================')
+  STDOUT.new.print('  All Benchmarks Complete')
+  STDOUT.new.print('========================================')
+}

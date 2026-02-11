@@ -1,0 +1,259 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+# This Source Code Form is subject to terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+#
+# Memory allocation tracking for benchmarks
+#
+# This module provides a lightweight memory tracking system that monitors
+# allocations at the FFI boundary. It's designed for use in benchmarks to
+# identify memory hotspots and measure allocation overhead.
+#
+# Usage:
+#   let tracker = MemoryTracker.new
+#   tracker.start
+#   let _ = some_allocation_heavy_operation()
+#   tracker.stop
+#   tracker.print_summary
+
+import std.stdio (Stdout)
+
+type pub MemoryTracker {
+  let mut @allocations: Int
+  let mut @bytes_allocated: Int
+  let mut @allocations_by_type: Array[(String, Int)]
+  let mut @bytes_by_type: Array[(String, Int)]
+  let mut @tracking: Bool
+  let @name: String
+}
+
+impl MemoryTracker {
+  fn pub static new(name: String) -> MemoryTracker {
+    MemoryTracker(
+      allocations: 0,
+      bytes_allocated: 0,
+      allocations_by_type: [],
+      bytes_by_type: [],
+      tracking: false,
+      name: name,
+    )
+  }
+
+  fn pub mut start {
+    @tracking = true
+  }
+
+  fn pub mut stop {
+    @tracking = false
+  }
+
+  fn pub mut reset {
+    @allocations = 0
+    @bytes_allocated = 0
+    @allocations_by_type = []
+    @bytes_by_type = []
+  }
+
+  fn pub mut record_allocation(allocation_type: String, bytes: Int) {
+    if !@tracking { return }
+
+    @allocations = @allocations + 1
+    @bytes_allocated = @bytes_allocated + bytes
+
+    let mut found = false
+    let mut i = 0
+
+    while i < @allocations_by_type.size {
+      match @allocations_by_type.get(i) {
+        case Ok((ty, count)) -> {
+          if ty == allocation_type {
+            @allocations_by_type.set(i, (ty, count + 1))
+            found = true
+          }
+        }
+        case Error(_) -> {}
+      }
+      i = i + 1
+    }
+
+    if !found {
+      @allocations_by_type.push((allocation_type, 1))
+    }
+
+    found = false
+    i = 0
+
+    while i < @bytes_by_type.size {
+      match @bytes_by_type.get(i) {
+        case Ok((ty, bytes_val)) -> {
+          if ty == allocation_type {
+            @bytes_by_type.set(i, (ty, bytes_val + bytes))
+            found = true
+          }
+        }
+        case Error(_) -> {}
+      }
+      i = i + 1
+    }
+
+    if !found {
+      @bytes_by_type.push((allocation_type, bytes))
+    }
+  }
+
+  fn pub allocations -> Int {
+    @allocations
+  }
+
+  fn pub bytes_allocated -> Int {
+    @bytes_allocated
+  }
+
+  fn pub allocations_by_type -> ref Array[(String, Int)] {
+    @allocations_by_type
+  }
+
+  fn pub bytes_by_type -> ref Array[(String, Int)] {
+    @bytes_by_type
+  }
+
+  fn pub format_bytes(bytes: Int) -> String {
+    if bytes < 1024 {
+      return '${bytes}B'
+    }
+
+    let kb = bytes / 1024
+
+    if kb < 1024 {
+      return '${kb}KB'
+    }
+
+    let mb = kb / 1024
+
+    if mb < 1024 {
+      return '${mb}MB'
+    }
+
+    let gb = mb / 1024
+
+    '${gb}GB'
+  }
+
+  fn pub print_summary {
+    Stdout.new.print('')
+    Stdout.new.print('=== ${@name} Memory Allocation ===')
+    Stdout.new.print("  Total allocations: ${@allocations}")
+    Stdout.new.print(
+      "  Total bytes allocated: ${format_bytes(@bytes_allocated)}",
+    )
+    Stdout.new.print('')
+
+    if @allocations > 0 {
+      Stdout.new.print('Allocations by type:')
+
+      let mut sorted = @allocations_by_type.clone
+      let mut i = 0
+
+      while i < sorted.size {
+        let mut max_j = i
+        let mut j = i + 1
+
+        while j < sorted.size {
+          match sorted.get(j) {
+            case Ok((_, count_j)) -> match sorted.get(max_j) {
+              case Ok((_, count_max)) -> {
+                if count_j > count_max { max_j = j }
+              }
+              case Error(_) -> {}
+            }
+            case Error(_) -> {}
+          }
+          j = j + 1
+        }
+
+        let temp = sorted.get(i).or_panic
+        let temp_val = sorted.get(max_j).or_panic
+        let temp_clone = (temp.0.clone, temp.1)
+        let temp_val_clone = (temp_val.0.clone, temp_val.1)
+        sorted.set(i, temp_val_clone)
+        sorted.set(max_j, temp_clone)
+
+        i = i + 1
+      }
+
+      for (ty, count) in sorted.iter {
+        let percentage = (count * 100) / @allocations
+        Stdout.new.print("    ${ty}: ${count} (${percentage}%)")
+      }
+      Stdout.new.print('')
+
+      Stdout.new.print('Bytes allocated by type:')
+
+      sorted = @bytes_by_type.clone
+      i = 0
+
+      while i < sorted.size {
+        let mut max_j = i
+        let mut j = i + 1
+
+        while j < sorted.size {
+          match sorted.get(j) {
+            case Ok((_, bytes_j)) -> match sorted.get(max_j) {
+              case Ok((_, bytes_max)) -> {
+                if bytes_j > bytes_max { max_j = j }
+              }
+              case Error(_) -> {}
+            }
+            case Error(_) -> {}
+          }
+          j = j + 1
+        }
+
+        let temp = sorted.get(i).or_panic
+        let temp_val = sorted.get(max_j).or_panic
+        let temp_clone = (temp.0.clone, temp.1)
+        let temp_val_clone = (temp_val.0.clone, temp_val.1)
+        sorted.set(i, temp_val_clone)
+        sorted.set(max_j, temp_clone)
+
+        i = i + 1
+      }
+
+      for (ty, bytes_val) in sorted.iter {
+        let percentage = (bytes_val * 100) / @bytes_allocated
+        Stdout.new.print(
+          "    ${ty}: ${format_bytes(bytes_val)} (${percentage}%)",
+        )
+      }
+      Stdout.new.print('')
+    }
+
+    if @allocations > 0 {
+      let avg_bytes = @bytes_allocated / @allocations
+      Stdout.new.print(
+        "  Average allocation size: ${format_bytes(avg_bytes)}",
+      )
+    }
+
+    Stdout.new.print('')
+  }
+
+  fn pub allocation_rate(duration_ns: Int) -> Float {
+    if duration_ns == 0 { return 0.0 }
+
+    @allocations as Float / (duration_ns as Float / 1_000_000_000.0)
+  }
+
+  fn pub print_rate(duration_ns: Int) {
+    if duration_ns > 0 {
+      Stdout.new.print(
+        "  Allocation rate: ${allocation_rate(duration_ns).to_int} allocations/sec",
+      )
+    }
+  }
+}
+
+

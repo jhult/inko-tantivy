@@ -1,0 +1,297 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+#
+# Memory marshaling utilities for Tantivy FFI
+#
+# This module provides helper functions for converting between Inko and C types,
+# handling string marshaling, and managing memory buffers for FFI operations.
+
+import buffer_pool (get_string_buffer, return_string_buffer)
+import pointer_helpers (pointer_offset, pointer_to_int, read_usize, write_usize)
+import tantivy.ffi (
+  FIELD_OFFSET_VALUE, FIELD_SIZE, TANTIVY_ERROR_BUFFER_SIZE, tantivy_error_free,
+)
+import std.bytes (ByteArray)
+import std.string (StringBuffer)
+
+# Helper: Join array of strings with separator
+fn pub join_strings(strings: ref Array[String], sep: String) -> String {
+  let mut buffer = StringBuffer.new
+  let mut first = true
+
+  for s in strings.iter {
+    if !first { buffer.push(sep) }
+
+    buffer.push(s)
+    first = false
+  }
+
+  buffer.into_string
+}
+
+# Helper: Get pointer to C array element at given index
+# Reduces repetitive pointer arithmetic in parsing loops
+fn pub c_array_element_ptr(
+  base_ptr: Pointer[UInt8],
+  index: Int,
+  struct_size: Int,
+) -> Pointer[UInt8] {
+  ((base_ptr as Int) + (index * struct_size)) as Pointer[UInt8]
+}
+
+# Helper: Copy bytes from source to destination
+# Replaces manual while loops that are error-prone and repetitive
+#
+# Uses ByteArray.bytes iterator to iterate over bytes, which is more
+# idiomatic than manual indexed loops.
+fn pub copy_bytes(from: ref ByteArray, to: mut ByteArray) {
+  for (i, byte) in from.bytes.with_index { let _ = to.set(i, byte) }
+}
+
+# Convert Inko string to null-terminated C string buffer using buffer pool
+fn pub string_to_c_buffer(s: String) -> ByteArray {
+  get_string_buffer(s.size + 1)
+}
+
+# Release string buffer back to pool (call after FFI operation completes)
+fn pub release_string_buffer(buffer: ByteArray) {
+  return_string_buffer(buffer)
+}
+
+# Helper: Read a string field from a C struct at given offset
+# Handles null pointer check and conversion
+# Takes buffer_size as parameter to allow configurable buffer sizes
+fn pub read_string_field(
+  base_ptr: Pointer[UInt8],
+  offset: Int,
+  buffer_size: Int,
+) -> String {
+  let ptr_addr = read_usize(pointer_offset(base_ptr, offset))
+
+  if ptr_addr != 0 {
+    let ptr = ptr_addr as Pointer[UInt8]
+
+    c_pointer_to_string(ptr, buffer_size)
+  } else {
+    ''
+  }
+}
+
+# Helper: Read an optional string field from a C struct at given offset
+#
+# Returns:
+# - Option.Some(value) if field exists and has non-empty content
+# - Option.None if field pointer is null (field not present) OR string is empty (field present but empty)
+#
+# Why empty strings return None:
+# - This design treats "field not set" and "field set to empty" equivalently
+# - Matches typical database behavior where NULL and empty string often treated the same
+# - Simplifies API by requiring only one check (if field exists) instead of two
+# - For email schema specifically, empty optional fields are semantically equivalent to absent
+#
+# If you need to distinguish "not set" from "empty", use read_string_field instead
+# and check for null/empty explicitly in your code.
+#
+# Takes buffer_size as parameter to allow configurable buffer sizes
+fn pub read_optional_string_field(
+  base_ptr: Pointer[UInt8],
+  offset: Int,
+  buffer_size: Int,
+) -> Option[String] {
+  let ptr_addr = read_usize(pointer_offset(base_ptr, offset))
+
+  if ptr_addr != 0 {
+    let ptr = ptr_addr as Pointer[UInt8]
+    let str = c_pointer_to_string(ptr, buffer_size)
+
+    if str.size > 0 { Option.Some(str) } else { Option.None }
+  } else {
+    Option.None
+  }
+}
+
+# Helper: Create field array for document indexing using buffer pool
+fn pub create_field_array(fields: Array[(String, String)]) -> ByteArray {
+  let array_size = fields.size * FIELD_SIZE
+  let buf = ByteArray.filled(with: 0, times: array_size)
+
+  let mut i = 0
+
+  for (key, value) in fields {
+    let key_buf = get_string_buffer(key.size + 1)
+    let value_buf = get_string_buffer(value.size + 1)
+
+    let base_offset = i * FIELD_SIZE
+
+    write_usize(
+      pointer_offset(buf.pointer, base_offset),
+      pointer_to_int(key_buf.pointer),
+    )
+
+    write_usize(
+      pointer_offset(buf.pointer, base_offset + FIELD_OFFSET_VALUE),
+      pointer_to_int(value_buf.pointer),
+    )
+
+    i = i + 1
+  }
+
+  buf
+}
+
+# Helper: Convert C pointer to String (reads until null terminator)
+fn pub c_pointer_to_string(ptr: Pointer[UInt8], max_len: Int) -> String {
+  if (ptr as Int) == 0 { return '' }
+
+  # Read bytes until null terminator
+  let bytes = ByteArray.filled(with: 0, times: max_len)
+  let mut i = 0
+  let mut reading = true
+
+  while reading and (i < max_len) {
+    # Pointer arithmetic to get byte at offset i
+    let byte_ptr = (ptr as Int + i) as Pointer[UInt8]
+    let byte = byte_ptr.0
+
+    if (byte as Int) == 0 {
+      reading = false
+    } else {
+      let _ = bytes.set(i, byte as Int)
+
+      i = i + 1
+    }
+  }
+
+  # Convert bytes to string
+  bytes.to_string
+}
+
+# Helper: Convert C pointer to String with truncation detection
+# Returns (string, was_truncated) tuple for detecting buffer overflow
+fn pub c_pointer_to_string_checked(
+  ptr: Pointer[UInt8],
+  max_len: Int,
+) -> (String, Bool) {
+  if (ptr as Int) == 0 { return ('', false) }
+
+  # Read bytes until null terminator
+  let bytes = ByteArray.filled(with: 0, times: max_len)
+  let mut i = 0
+  let mut reading = true
+  let mut truncated = false
+
+  while reading and (i < max_len) {
+    # Pointer arithmetic to get byte at offset i
+    let byte_ptr = (ptr as Int + i) as Pointer[UInt8]
+    let byte = byte_ptr.0
+
+    if (byte as Int) == 0 {
+      reading = false
+    } else {
+      let _ = bytes.set(i, byte as Int)
+
+      i = i + 1
+    }
+  }
+
+  # Check if we hit the limit without finding null terminator
+  if reading and (i >= max_len) { truncated = true }
+
+  # Convert bytes to string
+  (bytes.to_string, truncated)
+}
+
+# Helper: Allocate error output storage and return storage and pointer
+fn pub allocate_error_output -> (ByteArray, Pointer[UInt8]) {
+  let error_out_storage = ByteArray.filled(with: 0, times: 8)
+  let error_out_ptr = error_out_storage.pointer
+
+  (error_out_storage, error_out_ptr)
+}
+
+# Helper: Check FFI error pointer and return error message if present
+# Returns Result.Ok(nil) if no error, Result.Error(message) if error occurred
+fn pub check_ffi_error(error_out_ptr: Pointer[UInt8]) -> Result[Nil, String] {
+  let error_ptr_addr = read_usize(error_out_ptr)
+
+  if error_ptr_addr != 0 {
+    let error_ptr = error_ptr_addr as Pointer[UInt8]
+    let error_msg = c_pointer_to_string(error_ptr, TANTIVY_ERROR_BUFFER_SIZE)
+
+    tantivy_error_free(error_ptr)
+    Result.Error(error_msg)
+  } else {
+    Result.Ok(nil)
+  }
+}
+
+# Convert array of Inko strings to array of C string pointers
+#
+# ## Lifetime Requirements (CRITICAL)
+#
+# The returned ByteArray contains pointers to intermediate string buffers.
+# **These pointers are only valid for a very short window**: from when this
+# function returns until the FFI call that uses them completes.
+#
+# ### Safety Explanation
+#
+# This function creates ByteArray buffers for each string but only returns
+# the pointer array. The intermediate buffers (c_buf) go out of scope within
+# the function, but Inko's memory management keeps them alive until the
+# function returns and the pointers are used.
+#
+# ### Correct Usage
+#
+# ```inko
+# # GOOD: Use pointers immediately in same scope
+# let c_strings = string_array_to_c_pointers(doc_ids)
+# let result = tantivy_index_delete_docs(idx, c_strings.pointer, count, error)
+# # FFI call completes here, buffers can now be dropped
+# ```
+#
+# ### Incorrect Usage
+#
+# ```inko
+# # BAD: Storing result for later use - buffers will be freed!
+# let c_strings = string_array_to_c_pointers(doc_ids)
+# some_global_state.store(c_strings)  # Pointers become invalid here
+# # Later call to FFI would use freed memory -> undefined behavior
+# ```
+#
+# ### Implementation Notes
+#
+# The current design works because:
+# 1. Caller uses pointers immediately in same scope
+# 2. Inko's memory model keeps intermediate buffers alive during the function call
+# 3. No long-term storage of the returned ByteArray is needed
+#
+# ### Alternative Design
+#
+# Consider returning (pointers: ByteArray, buffers: Array[ByteArray]) to
+# make buffer ownership explicit. This would prevent misuse but adds overhead
+# of tracking buffers explicitly.
+#
+# Parameters:
+#   strings: Array of Inko strings to convert
+#
+# Returns:
+#   ByteArray containing C string pointers (8 bytes per pointer)
+#
+# See Also:
+#   docs/memory.md for detailed FFI memory ownership rules
+fn pub string_array_to_c_pointers(strings: Array[String]) -> ByteArray {
+  let pointers = ByteArray.filled(with: 0, times: strings.size * 8)
+  let mut i = 0
+
+  for s in strings {
+    let c_buf = string_to_c_buffer(s)
+    let ptr = c_buf.pointer
+    let ptr_int = pointer_to_int(ptr)
+    let _ = write_usize(pointer_offset(pointers.pointer, i), ptr_int)
+
+    i = i + 8
+  }
+
+  pointers
+}

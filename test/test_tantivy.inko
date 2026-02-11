@@ -1,0 +1,471 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+import std.test (Tests)
+import tantivy.index_manager (
+  TantivyAggregationResult, TantivyConfig, TantivyResult, TantivySuggestion,
+)
+import tantivy.query_builder (TantivyQueryBuilder)
+
+fn pub tests(t: mut Tests) {
+  # TantivyConfig path validation tests
+  t.test('TantivyConfig.new rejects empty path', fn (t) {
+    match TantivyConfig.new('') {
+      case Error(msg) -> t.true(msg.contains?('empty'))
+      case Ok(_) -> t.true(false)
+    }
+  })
+
+  t.test('TantivyConfig.new rejects path with ..', fn (t) {
+    match TantivyConfig.new('../etc/passwd') {
+      case Error(msg) -> {
+        t.true(msg.contains?('directory traversal') or msg.contains?('..'))
+      }
+      case Ok(_) -> t.true(false)
+    }
+  })
+
+  t.test('TantivyConfig.new accepts valid path', fn (t) {
+    match TantivyConfig.new('/tmp/tantivy-test-index') {
+      case Ok(config) -> {
+        t.equal(config.index_path, '/tmp/tantivy-test-index')
+        t.equal(config.reader_memory_budget_bytes, 50_000_000)
+        t.equal(config.writer_memory_budget_bytes, 100_000_000)
+        t.equal(config.num_threads, 4)
+      }
+      case Error(_) -> t.true(false)
+    }
+  })
+
+  # TantivyConfig tests
+  t.test('TantivyConfig with defaults', fn (t) {
+    match TantivyConfig.new('/tmp/tantivy-test-index') {
+      case Ok(config) -> {
+        t.equal(config.index_path, '/tmp/tantivy-test-index')
+        t.equal(config.reader_memory_budget_bytes, 50_000_000)
+        t.equal(config.writer_memory_budget_bytes, 100_000_000)
+        t.equal(config.num_threads, 4)
+      }
+      case Error(_) -> t.true(false)
+    }
+  })
+
+  t.test('TantivyConfig accepts valid memory ranges', fn (t) {
+    # Test minimum and maximum reader_memory
+    match TantivyConfig.new('/tmp/tantivy-test') {
+      case Error(_) -> t.true(false)
+      case Ok(config) -> {
+        match config.with_reader_memory(10_000_000) {
+          case Error(_) -> t.true(false)
+          case Ok(config) -> {
+            match config.with_reader_memory(10_000_000_000) {
+              case Error(_) -> t.true(false)
+              case Ok(config) -> {
+                t.equal(config.reader_memory_budget_bytes, 10_000_000_000)
+              }
+            }
+          }
+        }
+      }
+    }
+
+    # Test minimum and maximum writer_memory
+    match TantivyConfig.new('/tmp/tantivy-test') {
+      case Error(_) -> t.true(false)
+      case Ok(config) -> {
+        match config.with_writer_memory(25_000_000) {
+          case Error(_) -> t.true(false)
+          case Ok(config) -> {
+            match config.with_writer_memory(50_000_000_000) {
+              case Error(_) -> t.true(false)
+              case Ok(config) -> {
+                t.equal(config.writer_memory_budget_bytes, 50_000_000_000)
+              }
+            }
+          }
+        }
+      }
+    }
+  })
+
+  t.test('TantivyConfig with custom values', fn (t) {
+    match TantivyConfig.new('/tmp/tantivy-test') {
+      case Ok(config) -> {
+        match config.with_reader_memory(100_000_000) {
+          case Ok(config) -> {
+            match config.with_writer_memory(200_000_000) {
+              case Ok(config) -> {
+                match config.with_threads(8) {
+                  case Ok(config) -> {
+                    t.equal(config.reader_memory_budget_bytes, 100_000_000)
+                    t.equal(config.writer_memory_budget_bytes, 200_000_000)
+                    t.equal(config.num_threads, 8)
+                  }
+                  case Error(_) -> t.true(false)
+                }
+              }
+              case Error(_) -> t.true(false)
+            }
+          }
+          case Error(_) -> t.true(false)
+        }
+      }
+      case Error(_) -> t.true(false)
+    }
+  })
+
+  t.test('TantivyConfig validation errors', fn (t) {
+    match TantivyConfig.new('/tmp/tantivy-test') {
+      case Ok(config) -> {
+        # reader_memory validation
+        match config.with_reader_memory(0) {
+          case Ok(_) -> t.true(false)
+          case Error(e) -> {
+            t.true(
+              e.contains?('reader_memory_budget_bytes must be at least 10MB'),
+            )
+          }
+        }
+
+        match config.with_reader_memory(5_000_000) {
+          case Ok(_) -> t.true(false)
+          case Error(e) -> {
+            t.true(
+              e.contains?('reader_memory_budget_bytes must be at least 10MB'),
+            )
+          }
+        }
+
+        match config.with_reader_memory(11_000_000_000) {
+          case Ok(_) -> t.true(false)
+          case Error(e) -> {
+            t.true(
+              e.contains?('reader_memory_budget_bytes must be at most 10GB'),
+            )
+          }
+        }
+
+        # writer_memory validation
+        match config.with_writer_memory(0) {
+          case Ok(_) -> t.true(false)
+          case Error(e) -> {
+            t.true(
+              e.contains?('writer_memory_budget_bytes must be at least 25MB'),
+            )
+          }
+        }
+
+        match config.with_writer_memory(10_000_000) {
+          case Ok(_) -> t.true(false)
+          case Error(e) -> {
+            t.true(
+              e.contains?('writer_memory_budget_bytes must be at least 25MB'),
+            )
+          }
+        }
+
+        match config.with_writer_memory(51_000_000_000) {
+          case Ok(_) -> t.true(false)
+          case Error(e) -> {
+            t.true(
+              e.contains?('writer_memory_budget_bytes must be at most 50GB'),
+            )
+          }
+        }
+
+        # num_threads validation
+        match config.with_threads(0) {
+          case Ok(_) -> t.true(false)
+          case Error(e) -> t.true(e.contains?('num_threads must be at least 1'))
+        }
+
+        match config.with_threads(65) {
+          case Ok(_) -> t.true(false)
+          case Error(e) -> t.true(e.contains?('num_threads must be at most 64'))
+        }
+      }
+      case Error(_) -> t.true(false)
+    }
+  })
+
+  # TantivyQueryBuilder tests
+  t.test('TantivyQueryBuilder empty', fn (t) {
+    let builder = TantivyQueryBuilder.new
+    let query = builder.build
+
+    t.equal(query, '*'.to_string())
+  })
+
+  t.test('TantivyQueryBuilder with search text', fn (t) {
+    let builder = TantivyQueryBuilder.new
+
+    builder.search_text('subject', 'hello world')
+    builder.search_text('body', 'email content')
+
+    let query = builder.build
+
+    t.true(query.contains?('subject:hello world'))
+    t.true(query.contains?('body:email content'))
+  })
+
+  t.test('TantivyQueryBuilder with exact match', fn (t) {
+    let builder = TantivyQueryBuilder.new
+
+    builder.exact_match('status', 'published')
+
+    let query = builder.build
+
+    t.true(query.contains?('status:"published"'))
+  })
+
+  t.test('TantivyQueryBuilder with range', fn (t) {
+    let builder = TantivyQueryBuilder.new
+
+    builder.range('date', 2020, 2024)
+
+    let query = builder.build
+
+    t.true(query.contains?('date:[2020 TO 2024]'))
+  })
+
+  t.test('TantivyQueryBuilder with filter', fn (t) {
+    let builder = TantivyQueryBuilder.new
+
+    builder.filter('account_id', 'user123')
+
+    let query = builder.build
+
+    t.true(query.contains?('account_id:user123'))
+  })
+
+  t.test('TantivyQueryBuilder with NOT query', fn (t) {
+    let builder = TantivyQueryBuilder.new
+
+    builder.not('status', 'deleted')
+
+    let query = builder.build
+
+    t.true(query.contains?('NOT status:deleted'))
+  })
+
+  t.test('TantivyQueryBuilder with prefix query', fn (t) {
+    let builder = TantivyQueryBuilder.new
+
+    builder.prefix('subject', 'test')
+
+    let query = builder.build
+
+    t.true(query.contains?('subject:"test*"'))
+  })
+
+  t.test('TantivyQueryBuilder with fuzzy query', fn (t) {
+    let builder = TantivyQueryBuilder.new
+
+    builder.fuzzy('subject', 'test', 1)
+
+    let query = builder.build
+
+    t.true(query.contains?('subject:"test"~1'))
+  })
+
+  t.test('TantivyQueryBuilder combined', fn (t) {
+    let builder = TantivyQueryBuilder.new
+
+    builder.search_text('subject', 'important')
+    builder.filter('status', 'unread')
+    builder.range('date', 2023, 2024)
+
+    let query = builder.build
+
+    t.true(query.contains?('subject:important'))
+    t.true(query.contains?('status:unread'))
+    t.true(query.contains?('date:[2023 TO 2024]'))
+  })
+
+  # TantivyResult tests
+  t.test('TantivyResult with highlight', fn (t) {
+    let result = TantivyResult(
+      doc_id: 'test-doc-1',
+      score: 0.95,
+      highlight: Option.Some('matched text'),
+    )
+
+    t.equal(result.doc_id, 'test-doc-1')
+    t.equal(result.score, 0.95)
+
+    match result.highlight {
+      case Some(highlight) -> t.true(highlight.contains?('matched'))
+      case None -> t.true(false)
+    }
+  })
+
+  t.test('TantivyResult without highlight', fn (t) {
+    let result = TantivyResult(
+      doc_id: 'test-doc-2',
+      score: 0.87,
+      highlight: Option.None,
+    )
+
+    t.equal(result.doc_id, 'test-doc-2')
+    t.equal(result.score, 0.87)
+
+    match result.highlight {
+      case Some(_) -> t.true(false)
+      case None -> t.true(true)
+    }
+  })
+
+  # TantivyAggregationResult tests
+  t.test('TantivyAggregationResult', fn (t) {
+    let result = TantivyAggregationResult(key: 'Inbox', count: 42)
+
+    t.equal(result.key, 'Inbox')
+    t.equal(result.count, 42)
+  })
+
+  # TantivySuggestion tests
+  t.test('TantivySuggestion', fn (t) {
+    let suggestion = TantivySuggestion(text: 'electronic', score: 0.92)
+
+    t.equal(suggestion.text, 'electronic')
+    t.equal(suggestion.score, 0.92)
+  })
+
+  # Query injection prevention tests
+  t.test('TantivyQueryBuilder escapes special characters', fn (t) {
+    let builder = TantivyQueryBuilder.new
+
+    builder.search_text('field', 'test: "value" AND (foo OR bar)')
+
+    let query = builder.build
+
+    # Verify that special characters are properly escaped
+    # The input 'test: "value" AND (foo OR bar)' should be escaped to:
+    # 'test: \"value\" AND \(foo OR bar\)'
+    # Quotes and parentheses are escaped, but colons are not
+    t.true(query.contains?('test: \\"value\\"'))
+    t.true(query.contains?('\\(foo OR bar\\)'))
+  })
+
+  t.test('TantivyQueryBuilder handles backslashes', fn (t) {
+    let builder = TantivyQueryBuilder.new
+
+    builder.search_text('path', 'C:\\Users\\test')
+
+    let query = builder.build
+
+    # Query should contain the input terms
+    t.true(query.contains?('C'))
+    t.true(query.contains?('Users'))
+    t.true(query.contains?('test'))
+  })
+
+  t.test('TantivyQueryBuilder handles quotes', fn (t) {
+    let builder = TantivyQueryBuilder.new
+
+    builder.search_text('message', 'He said "hello"')
+
+    let query = builder.build
+
+    # Query should contain the input terms
+    t.true(query.contains?('He'))
+    t.true(query.contains?('said'))
+    t.true(query.contains?('hello'))
+  })
+
+  t.test('TantivyQueryBuilder handles brackets', fn (t) {
+    let builder = TantivyQueryBuilder.new
+
+    builder.search_text('range', '[1 TO 10]')
+
+    let query = builder.build
+
+    # Query should contain -> input
+    t.true(query.contains?('1'))
+    t.true(query.contains?('10'))
+  })
+
+  # Test default buffer sizes
+  t.test('TantivyConfig with default buffer sizes', fn (t) {
+    match TantivyConfig.new('/tmp/tantivy-test') {
+      case Ok(config) -> {
+        t.equal(config.json_buffer_size, 1_048_576)
+        t.equal(config.string_buffer_size, 4096)
+      }
+      case Error(_) -> t.true(false)
+    }
+  })
+
+  # Test custom JSON buffer size
+  t.test('TantivyConfig with custom JSON buffer size', fn (t) {
+    match TantivyConfig.new('/tmp/tantivy-test') {
+      case Ok(config) -> {
+        match config.with_json_buffer_size(2_000_000) {
+          case Ok(config2) -> {
+            t.equal(config2.json_buffer_size, 2_000_000)
+            t.equal(config2.string_buffer_size, 4096)
+          }
+          case Error(_) -> t.true(false)
+        }
+      }
+      case Error(_) -> t.true(false)
+    }
+  })
+
+  # Test custom string buffer size
+  t.test('TantivyConfig with custom string buffer size', fn (t) {
+    match TantivyConfig.new('/tmp/tantivy-test') {
+      case Ok(config) -> {
+        match config.with_string_buffer_size(8192) {
+          case Ok(config2) -> {
+            t.equal(config2.json_buffer_size, 1_048_576)
+            t.equal(config2.string_buffer_size, 8192)
+          }
+          case Error(_) -> t.true(false)
+        }
+      }
+      case Error(_) -> t.true(false)
+    }
+  })
+
+  # Test buffer size validation
+  t.test('TantivyConfig validates JSON buffer size', fn (t) {
+    match TantivyConfig.validate_json_buffer_size(512) {
+      case Error(_) -> t.true(true)
+      case Ok(_) -> t.true(false)
+    }
+
+    match TantivyConfig.validate_json_buffer_size(101_000_001) {
+      case Error(_) -> t.true(true)
+      case Ok(_) -> t.true(false)
+    }
+  })
+
+  t.test('TantivyConfig validates string buffer size', fn (t) {
+    match TantivyConfig.validate_string_buffer_size(128) {
+      case Error(_) -> t.true(true)
+      case Ok(_) -> t.true(false)
+    }
+
+    match TantivyConfig.validate_string_buffer_size(1_000_001) {
+      case Error(_) -> t.true(true)
+      case Ok(_) -> t.true(false)
+    }
+  })
+
+  # Test valid buffer sizes
+  t.test('TantivyConfig accepts valid JSON buffer size', fn (t) {
+    match TantivyConfig.validate_json_buffer_size(10_000) {
+      case Ok(_) -> t.true(true)
+      case Error(_) -> t.true(false)
+    }
+  })
+
+  t.test('TantivyConfig accepts valid string buffer size', fn (t) {
+    match TantivyConfig.validate_string_buffer_size(512) {
+      case Ok(_) -> t.true(true)
+      case Error(_) -> t.true(false)
+    }
+  })
+}

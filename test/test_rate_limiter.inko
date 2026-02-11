@@ -1,0 +1,121 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+import std.test (Tests)
+
+import rate_limiter (RateLimiter)
+
+fn pub tests(t: mut Tests) {
+  t.test('create rate limiter', fn (t) {
+    let mut limiter = RateLimiter.new(10.0, 5.0)
+
+    t.equal(limiter.available_tokens, 10.0)
+  })
+
+  t.test('get capacity and refill_rate', fn (t) {
+    let limiter = RateLimiter.new(10.0, 5.0)
+
+    t.equal(limiter.capacity, 10.0)
+    t.equal(limiter.refill_rate, 5.0)
+  })
+
+  t.test('acquire single token', fn (t) {
+    let mut limiter = RateLimiter.new(10.0, 5.0)
+
+    t.true(limiter.acquire_token)
+    t.true(limiter.available_tokens < 10.0)
+  })
+
+  t.test('acquire until empty', fn (t) {
+    let mut limiter = RateLimiter.new(5.0, 10.0)
+
+    let mut i = 0
+    let mut acquired = 0
+
+    while i < 10 {
+      if limiter.acquire_token {
+        acquired = acquired + 1
+      }
+      i = i + 1
+    }
+
+    t.equal(acquired, 5)
+  })
+
+  t.test('acquire multiple tokens at once', fn (t) {
+    let mut limiter = RateLimiter.new(20.0, 10.0)
+
+    t.true(limiter.acquire_tokens(5))
+    t.true(limiter.available_tokens <= 15.0)
+
+    t.true(limiter.acquire_tokens(10))
+    t.true(limiter.available_tokens <= 5.0)
+
+    t.false(limiter.acquire_tokens(10))
+  })
+
+  t.test('capacity limits token count', fn (t) {
+    let mut limiter = RateLimiter.new(10.0, 5.0)
+
+    let mut i = 0
+    while i < 20 {
+      let _ = limiter.acquire_token
+      i = i + 1
+    }
+
+    t.true(limiter.available_tokens <= 10.0)
+  })
+
+  t.test('manually refill tokens', fn (t) {
+    let mut limiter = RateLimiter.new(10.0, 5.0)
+
+    let mut i = 0
+    while i < 10 {
+      let _ = limiter.acquire_token
+      i = i + 1
+    }
+
+    t.true(limiter.available_tokens == 0.0)
+
+    limiter.refill(5.0)
+
+    t.true(limiter.available_tokens >= 5.0)
+
+    limiter.refill(20.0)
+
+    t.equal(limiter.available_tokens, 10.0)
+  })
+
+  t.test('capacity limits manual refill', fn (t) {
+    let mut limiter = RateLimiter.new(10.0, 5.0)
+
+    limiter.refill(100.0)
+
+    t.equal(limiter.available_tokens, 10.0)
+  })
+
+  t.test('automatic refill increases available_tokens', fn (t) {
+    let mut limiter = RateLimiter.new(10.0, 100.0)
+
+    let mut i = 0
+    while i < 10 {
+      let _ = limiter.acquire_token
+      i = i + 1
+    }
+
+    t.true(limiter.available_tokens == 0.0)
+
+    let initial_available = limiter.available_tokens
+
+    let mut i = 0
+    while i < 10000 {
+      let _ = limiter.available_tokens
+      i = i + 1
+    }
+
+    let after_delay = limiter.available_tokens
+
+    t.true(after_delay >= initial_available)
+  })
+}

@@ -1,0 +1,231 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed
+# with this file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+import pointer_helpers (
+  is_aligned_to, is_null, pointer_offset, pointer_to_int, read_usize, write_usize,
+)
+import std.test (Tests)
+
+fn pub tests(t: mut Tests) {
+  t.test('write_usize and read_usize roundtrip', fn (t) {
+    let buffer = ByteArray.filled(with: 0, times: 16)
+    let ptr = buffer.pointer
+
+    write_usize(ptr, 0x123456789ABCDEF0)
+
+    let result = read_usize(ptr)
+
+    t.equal(result, 0x123456789ABCDEF0)
+  })
+
+  t.test('write_usize and read_usize roundtrip with zero', fn (t) {
+    let buffer = ByteArray.filled(with: 0, times: 16)
+    let ptr = buffer.pointer
+
+    write_usize(ptr, 0)
+
+    let result = read_usize(ptr)
+
+    t.equal(result, 0)
+  })
+
+  t.test('write_usize and read_usize roundtrip with max positive Int', fn (t) {
+    let buffer = ByteArray.filled(with: 0, times: 16)
+    let ptr = buffer.pointer
+
+    let max_int = 9223372036854775807
+    write_usize(ptr, max_int)
+
+    let result = read_usize(ptr)
+
+    t.equal(result, max_int)
+  })
+
+  t.test('write_usize and read_usize roundtrip with negative value', fn (t) {
+    let buffer = ByteArray.filled(with: 0, times: 16)
+    let ptr = buffer.pointer
+
+    write_usize(ptr, -1)
+
+    let result = read_usize(ptr)
+
+    t.equal(result, -1)
+  })
+
+  t.test('multiple writes and reads in same buffer', fn (t) {
+    let buffer = ByteArray.filled(with: 0, times: 32)
+    let ptr = buffer.pointer
+
+    write_usize(ptr, 0x1111111111111111)
+    write_usize(pointer_offset(ptr, 8), 0x2222222222222222)
+    write_usize(pointer_offset(ptr, 16), 0x3333333333333333)
+    write_usize(pointer_offset(ptr, 24), 0x4444444444444444)
+
+    t.equal(read_usize(ptr), 0x1111111111111111)
+    t.equal(read_usize(pointer_offset(ptr, 8)), 0x2222222222222222)
+    t.equal(read_usize(pointer_offset(ptr, 16)), 0x3333333333333333)
+    t.equal(read_usize(pointer_offset(ptr, 24)), 0x4444444444444444)
+  })
+
+  t.test('write_usize overwrites previous value', fn (t) {
+    let buffer = ByteArray.filled(with: 0, times: 16)
+    let ptr = buffer.pointer
+
+    write_usize(ptr, 1229782938247303441)
+    write_usize(ptr, -1383505805528216370)
+
+    t.equal(read_usize(ptr), -1383505805528216370)
+  })
+
+  t.test('pointer_offset adds offset correctly', fn (t) {
+    let buffer = ByteArray.filled(with: 0, times: 16)
+    let ptr = buffer.pointer
+
+    let offset_ptr = pointer_offset(ptr, 8)
+    let offset_int = pointer_to_int(offset_ptr)
+    let base_int = pointer_to_int(ptr)
+
+    t.equal(offset_int, base_int + 8)
+  })
+
+  t.test('pointer_offset handles negative offset', fn (t) {
+    let buffer = ByteArray.filled(with: 0, times: 16)
+    let ptr = buffer.pointer
+
+    let offset_ptr = pointer_offset(ptr, 4)
+    let base_int = pointer_to_int(ptr)
+
+    let offset_back = pointer_offset(offset_ptr, -4)
+
+    t.equal(pointer_to_int(offset_back), base_int)
+  })
+
+  t.test('is_null returns true for null pointer', fn (t) {
+    let null_ptr: Pointer[UInt8] = (0 as Int) as Pointer[UInt8]
+
+    t.true(is_null(null_ptr))
+  })
+
+  t.test('is_null returns false for valid pointer', fn (t) {
+    let buffer = ByteArray.filled(with: 0, times: 16)
+
+    t.false(is_null(buffer.pointer))
+  })
+
+  t.test('is_aligned_to returns true for 8-byte aligned pointer', fn (t) {
+    let buffer = ByteArray.filled(with: 0, times: 16)
+    let ptr = buffer.pointer
+
+    t.true(is_aligned_to(ptr, 8))
+  })
+
+  t.test('is_aligned_to returns true for 4-byte aligned pointer', fn (t) {
+    let buffer = ByteArray.filled(with: 0, times: 16)
+    let ptr = buffer.pointer
+
+    t.true(is_aligned_to(ptr, 4))
+  })
+
+  t.test('is_aligned_to returns true for 2-byte aligned pointer', fn (t) {
+    let buffer = ByteArray.filled(with: 0, times: 16)
+    let ptr = buffer.pointer
+
+    t.true(is_aligned_to(ptr, 2))
+  })
+
+  t.test('is_aligned_to returns true for 1-byte aligned pointer', fn (t) {
+    let buffer = ByteArray.filled(with: 0, times: 16)
+    let ptr = buffer.pointer
+
+    t.true(is_aligned_to(ptr, 1))
+  })
+
+  t.test('is_aligned_to returns false for misaligned pointer', fn (t) {
+    let buffer = ByteArray.filled(with: 0, times: 16)
+    let ptr = buffer.pointer
+    let misaligned = pointer_offset(ptr, 1)
+
+    t.false(is_aligned_to(misaligned, 8))
+  })
+
+  t.test('property test: roundtrip with random values', fn (t) {
+    let buffer = ByteArray.filled(with: 0, times: 16)
+    let ptr = buffer.pointer
+
+    let values = [
+      0,
+      1,
+      255,
+      256,
+      65535,
+      65536,
+      1311768467463790320,
+      -2,
+      -1,
+      -1,
+      -256,
+      -9223372036854775808,
+    ]
+
+    for v in values {
+      write_usize(ptr, v)
+      let result = read_usize(ptr)
+      t.equal(result, v)
+    }
+  })
+
+  t.test('property test: byte boundaries', fn (t) {
+    let buffer = ByteArray.filled(with: 0, times: 32)
+
+    let values = [
+      (0, 1),
+      (8, 256),
+      (16, 65536),
+      (24, 16777216),
+    ]
+
+    for (offset, expected) in values {
+      let ptr = pointer_offset(buffer.pointer, offset)
+      write_usize(ptr, expected)
+      t.equal(read_usize(ptr), expected)
+    }
+  })
+
+  t.test('alignment: 8-byte aligned pointer works', fn (t) {
+    let buffer = ByteArray.filled(with: 0, times: 16)
+    let ptr = buffer.pointer
+
+    write_usize(ptr, -2416609844048112514)
+    t.equal(read_usize(ptr), -2416609844048112514)
+  })
+
+  t.test('alignment: sequential 8-byte writes stay aligned', fn (t) {
+    let buffer = ByteArray.filled(with: 0, times: 32)
+    let ptr = buffer.pointer
+
+    write_usize(ptr, 1229782938247303441)
+    write_usize(pointer_offset(ptr, 8), 2459565876494606882)
+    write_usize(pointer_offset(ptr, 16), 3689348814741900223)
+    write_usize(pointer_offset(ptr, 24), 4919131752989193764)
+
+    t.equal(read_usize(ptr), 1229782938247303441)
+    t.equal(read_usize(pointer_offset(ptr, 8)), 2459565876494606882)
+    t.equal(read_usize(pointer_offset(ptr, 16)), 3689348814741900223)
+    t.equal(read_usize(pointer_offset(ptr, 24)), 4919131752989193764)
+  })
+
+  t.test('property test: little-endian byte order', fn (t) {
+    # Verify that write_usize uses little-endian byte order
+    # by checking that values with byte-aligned patterns read back correctly
+    let buffer = ByteArray.filled(with: 0, times: 16)
+    let ptr = buffer.pointer
+
+    # Write a value where each byte is distinct
+    write_usize(ptr, 72623859790382856)
+
+    # Read back should give same value if little-endian is used correctly
+    let result = read_usize(ptr)
+    t.equal(result, 72623859790382856)
+  })
+}

@@ -1,0 +1,289 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+#
+# CRUD operations integration tests
+# Tests for create/open index, add/retrieve documents, delete, and state management
+
+import helpers (cleanup_test_index, ffi_available, temp_index_path)
+import std.stdio (Stdout)
+import std.test (Tests)
+import tantivy.index_manager (TantivyConfig, TantivyIndexManager)
+
+fn pub tests(t: mut Tests) {
+  # FFI setup and index lifecycle tests
+  t.test('Setup: Verify FFI library is available', fn (t) {
+    if !ffi_available { t.true(false) }
+  })
+
+  # Only run integration tests if FFI is available
+  if !ffi_available {
+    let _ = Stdout.new.print(
+      '[TEST SKIP] FFI library not available. Skipping integration tests. Run ./build.sh test to build and test.',
+    )
+
+    return
+  }
+
+  t.test('Create and open index', fn (t) {
+    let path = temp_index_path('001')
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> return
+    }
+    let manager = TantivyIndexManager.new(config)
+
+    match manager.open {
+      case Ok(_) -> {}
+      case Error(_) -> {
+        # Skip this test if FFI is not available
+        t.true(true)
+
+        return
+      }
+    }
+
+    t.true(manager.is_open)
+
+    match manager.close {
+      case Ok(_) -> t.true(true)
+      case Error(_) -> t.true(true)
+    }
+
+    cleanup_test_index(path)
+  })
+
+  # Basic add and retrieve tests
+  t.test('Add and retrieve document', fn (t) {
+    let path = temp_index_path('002')
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> return
+    }
+    let manager = TantivyIndexManager.new(config)
+
+    match manager.open {
+      case Ok(_) -> {}
+      case Error(_) -> {
+        t.true(true)
+        return
+      }
+    }
+
+    # Add a document
+    let fields = [
+      ('subject', 'Test Email Subject'),
+      ('body', 'This is the body of the test email'),
+      ('from', 'test@example.com'),
+    ]
+
+    match manager.add_doc('test-doc-1', fields) {
+      case Ok(_) -> t.true(true)
+      case Error(_) -> {
+        # Debug:'Failed to add document: ${e}')
+        t.true(false)
+      }
+    }
+
+    # Commit the changes
+    match manager.commit {
+      case Ok(_) -> t.true(true)
+      case Error(_) -> {
+        # Debug:'Failed to commit: ${e}')
+        t.true(false)
+      }
+    }
+
+    # Retrieve the document
+    match manager.get_doc('test-doc-1') {
+      case Ok(doc) -> {
+        t.true(doc.contains?('Test Email Subject'))
+        t.true(doc.contains?('test@example.com'))
+      }
+      case Error(_) -> {
+        # Debug:'Failed to get document: ${e}')
+        t.true(false)
+      }
+    }
+
+    let _ = manager.close
+
+    cleanup_test_index(path)
+  })
+
+  # Delete operations tests
+  t.test('Delete document', fn (t) {
+    let path = temp_index_path('007')
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> return
+    }
+    let manager = TantivyIndexManager.new(config)
+
+    match manager.open {
+      case Ok(_) -> {}
+      case Error(_) -> {
+        t.true(false)
+
+        return
+      }
+    }
+
+    # Add a document
+    let fields = [('subject', 'To Be Deleted'), ('body', 'Delete me')]
+
+    match manager.add_doc('delete-me', fields) {
+      case Ok(_) -> {}
+      case Error(_) -> {
+        t.true(false)
+
+        return
+      }
+    }
+
+    match manager.commit {
+      case Ok(_) -> {}
+      case Error(_) -> {
+        t.true(false)
+
+        return
+      }
+    }
+
+    # Verify document exists
+    match manager.get_doc('delete-me') {
+      case Ok(_) -> t.true(true)
+      case Error(_) -> {
+        t.true(false)
+
+        return
+      }
+    }
+
+    # Delete the document
+    match manager.delete_doc('delete-me') {
+      case Ok(_) -> t.true(true)
+      case Error(_) -> {
+        # Debug:'Failed to delete: ${e}')
+        t.true(false)
+
+        return
+      }
+    }
+
+    match manager.commit {
+      case Ok(_) -> {}
+      case Error(_) -> {
+        t.true(false)
+
+        return
+      }
+    }
+
+    # Verify document no longer exists
+    match manager.get_doc('delete-me') {
+      case Ok(doc) -> {
+        # Document might still be returned as empty string
+        t.true(doc.size == 0 or doc == '{}')
+      }
+      case Error(_) -> t.true(true) # Error is acceptable for missing doc
+    }
+
+    let _ = manager.close
+
+    cleanup_test_index(path)
+  })
+
+  # State management tests
+  t.test('Operations fail when index not open', fn (t) {
+    let path = temp_index_path('021')
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> return
+    }
+    let mut manager = TantivyIndexManager.new(config)
+
+    # Don't open the index
+    t.false(manager.is_open)
+
+    # Test operations fail with appropriate error
+    match manager.add_doc('test', []) {
+      case Error(_) -> t.true(true)
+      case Ok(_) -> t.true(false)
+    }
+
+    match manager.search('test', 10, 0) {
+      case Error(_) -> t.true(true)
+      case Ok(_) -> t.true(false)
+    }
+
+    match manager.get_doc('test') {
+      case Error(_) -> t.true(true)
+      case Ok(_) -> t.true(false)
+    }
+
+    match manager.commit {
+      case Error(_) -> t.true(true)
+      case Ok(_) -> t.true(false)
+    }
+
+    match manager.rollback {
+      case Error(_) -> t.true(true)
+      case Ok(_) -> t.true(false)
+    }
+
+    match manager.delete_doc('test') {
+      case Error(_) -> t.true(true)
+      case Ok(_) -> t.true(false)
+    }
+
+    match manager.aggregate_terms('field', '*', 10) {
+      case Error(_) -> t.true(true)
+      case Ok(_) -> t.true(false)
+    }
+
+    match manager.get_facet_counts('field', '*') {
+      case Error(_) -> t.true(true)
+      case Ok(_) -> t.true(false)
+    }
+
+    match manager.autocomplete('field', 'prefix', 10) {
+      case Error(_) -> t.true(true)
+      case Ok(_) -> t.true(false)
+    }
+
+    match manager.did_you_mean('field', 'term', 1, 10) {
+      case Error(_) -> t.true(true)
+      case Ok(_) -> t.true(false)
+    }
+  })
+
+  t.test('is_open returns correct state', fn (t) {
+    let path = temp_index_path('029')
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> return
+    }
+    let mut manager = TantivyIndexManager.new(config)
+
+    # Initially not open
+    t.false(manager.is_open)
+
+    match manager.open {
+      case Ok(_) -> {
+        # Should be open now
+        t.true(manager.is_open)
+
+        # Close the index
+        match manager.close {
+          case Ok(_) -> {
+            # Should not be open
+            t.false(manager.is_open)
+          }
+          case Error(_) -> t.true(false)
+        }
+      }
+      case Error(_) -> t.true(false)
+    }
+  })
+}

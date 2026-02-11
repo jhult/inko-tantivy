@@ -1,0 +1,354 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+#
+# Batch operations integration tests
+# Tests for batch add, batch delete, and batch get operations
+
+import helpers (cleanup_test_index, ffi_available, temp_index_path)
+import std.stdio (Stdout)
+import std.test (Tests)
+import tantivy.index_manager (TantivyConfig, TantivyIndexManager)
+
+fn pub tests(t: mut Tests) {
+  # Only run integration tests if FFI is available
+  if !ffi_available {
+    let _ = Stdout.new.print(
+      '[TEST SKIP] FFI library not available. Skipping integration tests. Run ./build.sh test to build and test.',
+    )
+
+    return
+  }
+
+  # Test edge case: batch delete with non-existent documents
+  t.test('Batch delete with mix of existing and non-existent docs', fn (t) {
+    let path = temp_index_path('013')
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> return
+    }
+    let mut manager = TantivyIndexManager.new(config)
+
+    match manager.open {
+      case Ok(_) -> {
+        # Add two documents
+        let fields1 = [('title', 'Test'), ('body', 'Content')]
+        let fields2 = [('title', 'Test'), ('body', 'Content')]
+
+        match manager.add_doc('exists-1', fields1) {
+          case Ok(_) -> {
+            match manager.add_doc('exists-2', fields2) {
+              case Ok(_) -> {
+                match manager.commit {
+                  case Ok(_) -> {
+                    # Try to delete mix of existing and non-existent
+                    let doc_ids = ['exists-1', 'not-exists', 'exists-2']
+
+                    match manager.delete_documents(doc_ids) {
+                      case Ok(count) -> {
+                        # Should have deleted 2 (or possibly report partial success)
+                        t.true(count >= 2)
+                      }
+                      case Error(_) -> {
+                        # Partial failure is also acceptable behavior
+                        t.true(true)
+                      }
+                    }
+                  }
+                  case Error(_) -> t.true(false)
+                }
+              }
+              case Error(_) -> t.true(false)
+            }
+          }
+          case Error(_) -> t.true(false)
+        }
+      }
+      case Error(_) -> t.true(false)
+    }
+
+    let _ = manager.close
+  })
+
+  # Test multiple document retrieval
+  t.test('Get multiple documents', fn (t) {
+    let path = temp_index_path('009')
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> return
+    }
+    let manager = TantivyIndexManager.new(config)
+
+    match manager.open {
+      case Ok(_) -> {}
+      case Error(_) -> {
+        t.true(false)
+
+        return
+      }
+    }
+
+    # Add multiple documents
+    let mut i = 0
+
+    while i < 3 {
+      let doc_id = 'multi-${i}'
+      let fields = [('subject', 'Document ${i}'), ('body', 'Content ${i}')]
+
+      match manager.add_doc(doc_id, fields) {
+        case Ok(_) -> {}
+        case Error(_) -> {
+          t.true(false)
+
+          return
+        }
+      }
+
+      i = i + 1
+    }
+
+    match manager.commit {
+      case Ok(_) -> {}
+      case Error(_) -> {
+        t.true(false)
+
+        return
+      }
+    }
+
+    # Get multiple documents at once
+    let doc_ids = ['multi-0', 'multi-1', 'multi-2']
+
+    match manager.get_docs(doc_ids) {
+      case Ok(docs) -> {
+        t.equal(docs.size, 3)
+
+        match docs.get(0) {
+          case Ok(d) -> t.true(d.contains?('Document 0'))
+          case Error(_) -> t.true(false)
+        }
+
+        match docs.get(1) {
+          case Ok(d) -> t.true(d.contains?('Document 1'))
+          case Error(_) -> t.true(false)
+        }
+
+        match docs.get(2) {
+          case Ok(d) -> t.true(d.contains?('Document 2'))
+          case Error(_) -> t.true(false)
+        }
+      }
+      case Error(_) -> {
+        # Debug:'Get docs failed: ${e}')
+        t.true(false)
+      }
+    }
+
+    let _ = manager.close
+
+    cleanup_test_index(path)
+  })
+
+  # Test get_docs with empty array
+  t.test('Get multiple documents with empty array', fn (t) {
+    let path = temp_index_path('027')
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> return
+    }
+    let mut manager = TantivyIndexManager.new(config)
+
+    match manager.open {
+      case Ok(_) -> {
+        # Add a document
+        let fields = [('subject', 'Test'), ('body', 'Content')]
+
+        match manager.add_doc('test-doc', fields) {
+          case Ok(_) -> {}
+          case Error(_) -> {
+            t.true(false)
+            return
+          }
+        }
+
+        match manager.commit {
+          case Ok(_) -> {}
+          case Error(_) -> {
+            t.true(false)
+            return
+          }
+        }
+
+        # Get empty array of documents
+        match manager.get_docs([]) {
+          case Ok(docs) -> t.equal(docs.size, 0)
+          case Error(_) -> t.true(false)
+        }
+      }
+      case Error(_) -> t.true(false)
+    }
+
+    let _ = manager.close
+  })
+
+  # Test batch document indexing
+  t.test('Add documents in batch', fn (t) {
+    let path = temp_index_path('038')
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> return
+    }
+    let mut manager = TantivyIndexManager.new(config)
+
+    match manager.open {
+      case Ok(_) -> {
+        # Create multiple documents
+        let docs = [
+          ('batch-1', [('subject', 'Test 1'), ('body', 'Content 1')]),
+          ('batch-2', [('subject', 'Test 2'), ('body', 'Content 2')]),
+          ('batch-3', [('subject', 'Test 3'), ('body', 'Content 3')]),
+        ]
+
+        match manager.add_docs_batch(docs) {
+          case Ok(count) -> t.equal(count, 3)
+          case Error(_) -> t.true(false)
+        }
+
+        match manager.commit {
+          case Ok(_) -> {}
+          case Error(_) -> t.true(false)
+        }
+
+        # Verify all documents are indexed
+        match manager.get_docs(['batch-1', 'batch-2', 'batch-3']) {
+          case Ok(docs) -> {
+            t.equal(docs.size, 3)
+
+            match docs.get(0) {
+              case Ok(v) -> t.true(v != '')
+              case Error(_) -> t.true(false)
+            }
+
+            match docs.get(1) {
+              case Ok(v) -> t.true(v != '')
+              case Error(_) -> t.true(false)
+            }
+
+            match docs.get(2) {
+              case Ok(v) -> t.true(v != '')
+              case Error(_) -> t.true(false)
+            }
+          }
+          case Error(_) -> t.true(false)
+        }
+      }
+      case Error(_) -> t.true(false)
+    }
+
+    let _ = manager.close
+  })
+
+  # Test batch with empty array
+  t.test('Add empty batch of documents', fn (t) {
+    let path = temp_index_path('039')
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> return
+    }
+    let mut manager = TantivyIndexManager.new(config)
+
+    match manager.open {
+      case Ok(_) -> {
+        let docs: Array[(String, Array[(String, String)])] = []
+
+        match manager.add_docs_batch(docs) {
+          case Ok(count) -> t.equal(count, 0)
+          case Error(_) -> t.true(false)
+        }
+      }
+      case Error(_) -> t.true(false)
+    }
+
+    let _ = manager.close
+  })
+
+  # Test batch with single document
+  t.test('Add batch with single document', fn (t) {
+    let path = temp_index_path('040')
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> return
+    }
+    let mut manager = TantivyIndexManager.new(config)
+
+    match manager.open {
+      case Ok(_) -> {
+        let docs = [('single', [('subject', 'Single'), ('body', 'Content')])]
+
+        match manager.add_docs_batch(docs) {
+          case Ok(count) -> t.equal(count, 1)
+          case Error(_) -> t.true(false)
+        }
+
+        match manager.commit {
+          case Ok(_) -> {}
+          case Error(_) -> t.true(false)
+        }
+
+        match manager.get_doc('single') {
+          case Ok(doc) -> t.true(doc.contains?('Single'))
+          case Error(_) -> t.true(false)
+        }
+      }
+      case Error(_) -> t.true(false)
+    }
+
+    let _ = manager.close
+  })
+
+  # Test batch with large number of documents
+  t.test('Add batch with many documents', fn (t) {
+    let path = temp_index_path('041')
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> return
+    }
+    let mut manager = TantivyIndexManager.new(config)
+
+    match manager.open {
+      case Ok(_) -> {
+        # Create 100 documents
+        let mut docs = []
+
+        let mut i = 0
+
+        while i < 100 {
+          let doc_id = 'many-${i}'
+          let fields = [('subject', 'Test ${i}'), ('body', 'Content ${i}')]
+
+          docs.push((doc_id, fields))
+          i = i + 1
+        }
+
+        match manager.add_docs_batch(docs) {
+          case Ok(count) -> t.equal(count, 100)
+          case Error(_) -> t.true(false)
+        }
+
+        match manager.commit {
+          case Ok(_) -> {}
+          case Error(_) -> t.true(false)
+        }
+
+        # Search should return results
+        match manager.search('Test', limit: 50, offset: 0) {
+          case Ok(results) -> t.equal(results.size, 50)
+          case Error(_) -> t.true(false)
+        }
+      }
+      case Error(_) -> t.true(false)
+    }
+
+    let _ = manager.close
+  })
+}

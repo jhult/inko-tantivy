@@ -1,0 +1,88 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+#
+# Tantivy query builder
+#
+# This module provides a builder pattern for constructing Tantivy search queries.
+
+import tantivy.marshal (join_strings)
+
+# Tantivy query builder
+type pub TantivyQueryBuilder {
+  let mut @query_parts: Array[String]
+}
+
+impl TantivyQueryBuilder {
+  fn pub static new -> TantivyQueryBuilder {
+    TantivyQueryBuilder(query_parts: [])
+  }
+
+  # Add a full-text search query
+  fn pub mut search_text(field: String, text: String) {
+    @query_parts.push(
+      '${escape_query_string(field)}:${escape_query_string(text)}',
+    )
+  }
+
+  # Add an exact match query
+  fn pub mut exact_match(field: String, value: String) {
+    @query_parts.push(
+      '${escape_query_string(field)}:"${escape_query_string(value)}"',
+    )
+  }
+
+  # Add a range query
+  fn pub mut range(field: String, min: Int, max: Int) {
+    @query_parts.push('${escape_query_string(field)}:[${min} TO ${max}]')
+  }
+
+  # Add a filter query
+  fn pub mut filter(field: String, value: String) {
+    @query_parts.push(
+      '${escape_query_string(field)}:${escape_query_string(value)}',
+    )
+  }
+
+  # Add a boolean NOT query
+  fn pub mut not(field: String, value: String) {
+    @query_parts.push(
+      'NOT ${escape_query_string(field)}:${escape_query_string(value)}',
+    )
+  }
+
+  # Build the query string
+  fn pub build -> String {
+    if @query_parts.size == 0 { return '*'.to_string }
+
+    join_strings(@query_parts, ' AND ')
+  }
+
+  # Add a prefix query (for autocomplete)
+  fn pub mut prefix(field: String, prefix: String) {
+    @query_parts.push(
+      '${escape_query_string(field)}:"${escape_query_string(prefix)}*"',
+    )
+  }
+
+  # Add a fuzzy query (for did-you-mean)
+  fn pub mut fuzzy(field: String, term: String, distance: Int) {
+    @query_parts.push(
+      '${escape_query_string(field)}:"${escape_query_string(term)}"~${distance}',
+    )
+  }
+}
+
+# Helper: Escape special characters in Tantivy query strings
+# Prevents query injection by escaping characters with special meaning
+fn escape_query_string(s: String) -> String {
+  let result = s.replace('\\', '\\\\')
+  let result = result.replace('"', '\\"')
+  let result = result.replace("'", "\\'")
+  let result = result.replace('(', '\\(')
+  let result = result.replace(')', '\\)')
+  let result = result.replace('[', '\\[')
+  let result = result.replace(']', '\\]')
+
+  result
+}

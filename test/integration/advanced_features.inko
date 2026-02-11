@@ -1,0 +1,454 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+#
+# Advanced features integration tests for Tantivy FFI operations
+
+import std.test (Tests)
+import tantivy.index_manager (TantivyConfig, TantivyIndexManager)
+import helpers (cleanup_test_index, temp_index_path)
+
+fn pub tests(t: mut Tests) {
+  # Test aggregate_terms (facet_counts) functionality
+  t.test('Aggregate terms by field', fn (t) {
+    let path = temp_index_path('adv-001')
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> return
+    }
+    let mut manager = TantivyIndexManager.new(config)
+
+    match manager.open {
+      case Ok(_) -> {
+        # Add documents with folder field
+        let folders = ['Inbox', 'Inbox', 'Sent', 'Archive', 'Sent', 'Trash']
+        let mut i = 0
+
+        for folder in folders {
+          let doc_id = 'folder-test-${i}'
+          let fields = [('folder', folder), ('subject', 'Test ${i}')]
+
+          match manager.add_doc(doc_id, fields) {
+            case Ok(_) -> {}
+            case Error(_) -> {
+              t.true(false)
+              return
+            }
+          }
+
+          i = i + 1
+        }
+
+        match manager.commit {
+          case Ok(_) -> {}
+          case Error(_) -> {
+            t.true(false)
+            return
+          }
+        }
+
+        # Test aggregate_terms with custom limit
+        match manager.aggregate_terms('folder', '*', 10) {
+          case Ok(results) -> {
+            t.true(results.size > 0)
+            # Verify counts match expected (Inbox: 2, Sent: 2, Archive: 1, Trash: 1)
+            let mut inbox_count = 0
+            let mut sent_count = 0
+
+            for result in results.iter {
+              match result.key {
+                case 'Inbox' -> inbox_count = result.count
+                case 'Sent' -> sent_count = result.count
+                case _ -> {}
+              }
+            }
+
+            t.equal(inbox_count, 2)
+            t.equal(sent_count, 2)
+          }
+          case Error(_) -> t.true(false)
+        }
+      }
+      case Error(_) -> t.true(false)
+    }
+
+    let _ = manager.close
+
+    cleanup_test_index(path)
+  })
+
+  # Test get_facet_counts (uses default limit)
+  t.test('Get facet counts with default limit', fn (t) {
+    let path = temp_index_path('adv-002')
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> return
+    }
+    let mut manager = TantivyIndexManager.new(config)
+
+    match manager.open {
+      case Ok(_) -> {
+        # Add documents with different statuses
+        let statuses = ['unread', 'read', 'unread', 'unread', 'read']
+        let mut i = 0
+
+        for status in statuses {
+          let doc_id = 'status-test-${i}'
+          let fields = [('status', status), ('subject', 'Email ${i}')]
+
+          match manager.add_doc(doc_id, fields) {
+            case Ok(_) -> {}
+            case Error(_) -> {
+              t.true(false)
+              return
+            }
+          }
+
+          i = i + 1
+        }
+
+        match manager.commit {
+          case Ok(_) -> {}
+          case Error(_) -> {
+            t.true(false)
+            return
+          }
+        }
+
+        # Test get_facet_counts (uses default limit of 1000)
+        match manager.get_facet_counts('status', '*') {
+          case Ok(results) -> {
+            t.true(results.size > 0)
+            # Verify counts (unread: 3, read: 2)
+            let mut unread_count = 0
+            let mut read_count = 0
+
+            for result in results.iter {
+              match result.key {
+                case 'unread' -> unread_count = result.count
+                case 'read' -> read_count = result.count
+                case _ -> {}
+              }
+            }
+
+            t.equal(unread_count, 3)
+            t.equal(read_count, 2)
+          }
+          case Error(_) -> t.true(false)
+        }
+      }
+      case Error(_) -> t.true(false)
+    }
+
+    let _ = manager.close
+
+    cleanup_test_index(path)
+  })
+
+  # Test aggregate with query filter
+  t.test('Aggregate terms with query filter', fn (t) {
+    let path = temp_index_path('adv-003')
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> return
+    }
+    let mut manager = TantivyIndexManager.new(config)
+
+    match manager.open {
+      case Ok(_) -> {
+        # Add documents with different statuses
+        let mut i = 0
+
+        while i < 10 {
+          let status = if i < 5 { 'unread' } else { 'read' }
+          let folder = if i % 2 == 0 { 'Inbox' } else { 'Sent' }
+          let doc_id = 'filter-test-${i}'
+          let fields = [
+            ('status', status),
+            ('folder', folder),
+            ('subject', 'Email ${i}'),
+          ]
+
+          match manager.add_doc(doc_id, fields) {
+            case Ok(_) -> {}
+            case Error(_) -> {
+              t.true(false)
+              return
+            }
+          }
+
+          i = i + 1
+        }
+
+        match manager.commit {
+          case Ok(_) -> {}
+          case Error(_) -> {
+            t.true(false)
+            return
+          }
+        }
+
+        # Aggregate only unread emails
+        match manager.aggregate_terms('folder', 'status:unread', 10) {
+          case Ok(results) -> {
+            t.true(results.size > 0)
+            # Verify only folders with unread emails are counted
+            let mut total = 0
+
+            for result in results.iter { total = total + result.count }
+
+            # Should have exactly 5 unread emails across folders
+            t.equal(total, 5)
+          }
+          case Error(_) -> t.true(false)
+        }
+      }
+      case Error(_) -> t.true(false)
+    }
+
+    let _ = manager.close
+
+    cleanup_test_index(path)
+  })
+
+  # Test autocomplete functionality
+  t.test('Autocomplete suggestions', fn (t) {
+    let path = temp_index_path('adv-004')
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> return
+    }
+    let mut manager = TantivyIndexManager.new(config)
+
+    match manager.open {
+      case Ok(_) -> {
+        # Add documents with predictable text
+        let subjects = [
+          'Meeting about project',
+          'Meeting with team',
+          'Project timeline',
+          'Project requirements',
+          'Team updates',
+        ]
+        let mut i = 0
+
+        for subject in subjects {
+          let doc_id = 'auto-test-${i}'
+          let fields = [('subject', subject), ('body', 'Content ${i}')]
+
+          match manager.add_doc(doc_id, fields) {
+            case Ok(_) -> {}
+            case Error(_) -> {
+              t.true(false)
+              return
+            }
+          }
+
+          i = i + 1
+        }
+
+        match manager.commit {
+          case Ok(_) -> {}
+          case Error(_) -> {
+            t.true(false)
+            return
+          }
+        }
+
+        # Test autocomplete for 'meet' prefix
+        match manager.autocomplete('subject', 'meet', 10) {
+          case Ok(suggestions) -> {
+            t.true(suggestions.size > 0)
+            # Verify suggestions contain relevant terms
+            let mut found_meeting = false
+
+            for suggestion in suggestions.iter {
+              if suggestion.text.contains?('Meeting') { found_meeting = true }
+            }
+
+            t.true(found_meeting)
+          }
+          case Error(_) -> t.true(false)
+        }
+      }
+      case Error(_) -> t.true(false)
+    }
+
+    let _ = manager.close
+
+    cleanup_test_index(path)
+  })
+
+  # Test autocomplete with no results
+  t.test('Autocomplete with no matching prefix', fn (t) {
+    let path = temp_index_path('adv-005')
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> return
+    }
+    let mut manager = TantivyIndexManager.new(config)
+
+    match manager.open {
+      case Ok(_) -> {
+        let fields = [('subject', 'Test'), ('body', 'Content')]
+
+        match manager.add_doc('test-1', fields) {
+          case Ok(_) -> {}
+          case Error(_) -> {
+            t.true(false)
+            return
+          }
+        }
+
+        match manager.commit {
+          case Ok(_) -> {}
+          case Error(_) -> {
+            t.true(false)
+            return
+          }
+        }
+
+        # Search for prefix that doesn't exist
+        match manager.autocomplete('subject', 'xyz', 10) {
+          case Ok(suggestions) -> t.equal(suggestions.size, 0)
+          case Error(_) -> t.true(false)
+        }
+      }
+      case Error(_) -> t.true(false)
+    }
+
+    let _ = manager.close
+
+    cleanup_test_index(path)
+  })
+
+  # Test did_you_mean functionality
+  t.test('Did-you-mean suggestions', fn (t) {
+    let path = temp_index_path('adv-006')
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> return
+    }
+    let mut manager = TantivyIndexManager.new(config)
+
+    match manager.open {
+      case Ok(_) -> {
+        # Add documents with specific terms
+        let subjects = [
+          'electronic email system',
+          'electronic mail services',
+          'electronic communication',
+        ]
+        let mut i = 0
+
+        for subject in subjects {
+          let doc_id = 'dym-test-${i}'
+          let fields = [('subject', subject), ('body', 'Content ${i}')]
+
+          match manager.add_doc(doc_id, fields) {
+            case Ok(_) -> {}
+            case Error(_) -> {
+              t.true(false)
+              return
+            }
+          }
+
+          i = i + 1
+        }
+
+        match manager.commit {
+          case Ok(_) -> {}
+          case Error(_) -> {
+            t.true(false)
+            return
+          }
+        }
+
+        # Test did_you_mean with typo (electrnic -> electronic)
+        match
+          manager.did_you_mean('subject', 'electrnic', distance: 2, limit: 10)
+        {
+          case Ok(suggestions) -> {
+            t.true(suggestions.size > 0)
+            # Should suggest 'electronic'
+            let mut found_electronic = false
+
+            for suggestion in suggestions.iter {
+              if suggestion.text == 'electronic' { found_electronic = true }
+            }
+
+            t.true(found_electronic)
+          }
+          case Error(_) -> t.true(false)
+        }
+      }
+      case Error(_) -> t.true(false)
+    }
+
+    let _ = manager.close
+
+    cleanup_test_index(path)
+  })
+
+  # Test did_you_mean with distance parameter
+  t.test('Did-you-mean with different distances', fn (t) {
+    let path = temp_index_path('adv-007')
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> return
+    }
+    let mut manager = TantivyIndexManager.new(config)
+
+    match manager.open {
+      case Ok(_) -> {
+        let fields = [('subject', 'project management'), ('body', 'Content')]
+
+        match manager.add_doc('dym-test-1', fields) {
+          case Ok(_) -> {}
+          case Error(_) -> {
+            t.true(false)
+            return
+          }
+        }
+
+        match manager.commit {
+          case Ok(_) -> {}
+          case Error(_) -> {
+            t.true(false)
+            return
+          }
+        }
+
+        # Distance 0: exact match only
+        match
+          manager.did_you_mean('subject', 'project', distance: 0, limit: 10)
+        {
+          case Ok(suggestions) -> {
+            # Should find exact match 'project'
+            let mut found_exact = false
+
+            for suggestion in suggestions.iter {
+              if suggestion.text == 'project' { found_exact = true }
+            }
+
+            t.true(found_exact)
+          }
+          case Error(_) -> t.true(false)
+        }
+
+        # Distance 2: should allow for typos
+        match
+          manager.did_you_mean('subject', 'projct', distance: 2, limit: 10)
+        {
+          case Ok(suggestions) -> t.true(suggestions.size > 0)
+          case Error(_) -> t.true(false)
+        }
+      }
+      case Error(_) -> t.true(false)
+    }
+
+    let _ = manager.close
+
+    cleanup_test_index(path)
+  })
+}

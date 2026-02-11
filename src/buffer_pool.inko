@@ -1,0 +1,34 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+# This Source Code Form is subject to terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+import std.bytes (ByteArray)
+
+# Default buffer size for pooling (1KB should cover most use cases)
+let DEFAULT_BUFFER_POOL_SIZE = 1024
+
+# Maximum buffers to keep in pool (100 buffers should be sufficient)
+let MAX_POOL_SIZE = 100
+
+# NOTE: BufferPool implementation temporarily disabled due to type errors
+# The simple allocation functions below are used instead
+#
+# TODO: Fix BufferPool implementation to properly handle Option types
+
+# Get string buffer (always allocates a new buffer)
+fn pub get_string_buffer(size: Int) -> ByteArray {
+  ByteArray.filled(with: 0, times: size)
+}
+
+# Return string buffer (no-op for simple allocation)
+fn pub return_string_buffer(buffer: ByteArray) {
+}
+
+# Get pool statistics (always returns zeros for simple allocation)
+fn pub get_pool_stats -> (Int, Int, Int, Int) {
+  (0, 0, 0, 0)
+}

@@ -1,0 +1,303 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+import std.stdio (STDOUT)
+import std.time (Duration, Instant)
+import tantivy (TantivyConfig, TantivyIndexManager)
+
+# Benchmark statistics
+type BenchmarkStats {
+  let @name: String
+  let @iterations: Int
+  let @warmup_runs: Int
+  let @total_duration_ns: Int
+  let @durations: Array[Int]
+}
+
+impl BenchmarkStats {
+  fn pub static new(
+    name: String,
+    iterations: Int,
+    warmup_runs: Int,
+  ) -> BenchmarkStats {
+    BenchmarkStats(
+      name: name,
+      iterations: iterations,
+      warmup_runs: warmup_runs,
+      total_duration_ns: 0,
+      durations: [],
+    )
+  }
+
+  fn pub mean -> Int {
+    if @durations.size == 0 { return 0 }
+
+    @total_duration_ns / @durations.size
+  }
+
+  fn pub median -> Int {
+    if @durations.size == 0 { return 0 }
+
+    let mut sorted = @durations.clone
+    sorted.sort
+
+    let mid = sorted.size / 2
+
+    if sorted.size % 2 == 0 {
+      (sorted.get(mid).or_panic + sorted.get(mid - 1).or_panic) / 2
+    } else {
+      sorted.get(mid).or_panic
+    }
+  }
+
+  fn pub min -> Int {
+    if @durations.size == 0 { return 0 }
+
+    let mut min = @durations.get(0).or_panic
+    for d in @durations.iter {
+      if d < min { min = d }
+    }
+    min
+  }
+
+  fn pub max -> Int {
+    if @durations.size == 0 { return 0 }
+
+    let mut max = @durations.get(0).or_panic
+    for d in @durations.iter {
+      if d > max { max = d }
+    }
+    max
+  }
+
+  fn pub std_dev -> Int {
+    if @durations.size <= 1 { return 0 }
+
+    let mean = mean
+    let mut sum_diff_sq = 0
+
+    for d in @durations.iter {
+      let diff = d - mean
+      sum_diff_sq = sum_diff_sq + (diff * diff)
+    }
+
+    (sum_diff_sq / (@durations.size - 1)).sqrt.toInt
+  }
+
+  fn pub format_results {
+    STDOUT.new.print("")
+    STDOUT.new.print(@name)
+    STDOUT.new.print("====================================")
+    STDOUT.new.print("Iterations: ${@iterations}")
+    STDOUT.new.print("Warmup runs: ${@warmup_runs}")
+    STDOUT.new.print("")
+    STDOUT.new.print("Latency (ns):")
+    STDOUT.new.print("  Mean:   ${mean}")
+    STDOUT.new.print("  Median: ${median}")
+    STDOUT.new.print("  Min:    ${min}")
+    STDOUT.new.print("  Max:    ${max}")
+    STDOUT.new.print("  Std Dev: ${std_dev}")
+    STDOUT.new.print("")
+  }
+}
+
+# Benchmark: string_to_c_buffer performance
+# This measures the impact of buffer allocation for FFI calls
+fn benchmark_string_conversion(iterations: Int = 1000, warmup: Int = 10) {
+  let mut stats = BenchmarkStats.new(
+    "string_to_c_buffer (allocation impact)",
+    iterations,
+    warmup,
+  )
+
+  let test_string = "This is a test string with some length to measure allocation overhead"
+
+  let mut i = 0
+  while i < iterations + warmup {
+    let start = Instant.now
+
+    let _ = test_string.to_byte_array
+    let _ = ByteArray.filled(with: 0, times: test_string.size + 1)
+
+    let duration = Instant.now - start
+
+    if i >= warmup {
+      let mut durations = stats.durations
+      durations.push(duration)
+      let mut total = stats.total_duration_ns
+      total = total + duration
+      stats = BenchmarkStats(
+        name: stats.name,
+        iterations: stats.iterations,
+        warmup_runs: stats.warmup_runs,
+        total_duration_ns: total,
+        durations: durations,
+      )
+    }
+
+    i = i + 1
+  }
+
+  stats.format_results
+}
+
+# Benchmark: batch document indexing performance
+# This measures the impact of buffer allocation on batch operations
+fn benchmark_batch_indexing(iterations: Int = 100, warmup: Int = 10) {
+  let mut stats = BenchmarkStats.new(
+    "Batch indexing (100 docs x 10 fields)",
+    iterations,
+    warmup,
+  )
+
+  let test_index_path = '/tmp/bench-index'
+
+  let mut i = 0
+  while i < iterations + warmup {
+    # Clean up from previous iteration
+    match TantivyConfig.new(test_index_path) {
+      case Ok(config) -> {
+        let mut manager = TantivyIndexManager.new(config)
+
+        match manager.open {
+          case Ok(_) -> {
+            let start = Instant.now
+
+            let mut j = 0
+            while j < 100 {
+              let doc_id = "doc-${i}-${j}"
+
+              let mut fields = []
+              let mut k = 0
+              while k < 10 {
+                fields.push(("field_${k}", "value_${i}_${j}_${k}"))
+                k = k + 1
+              }
+
+              match manager.add_doc(doc_id, fields) {
+                case Ok(_) -> {}
+                case Error(_) -> {}
+              }
+
+              j = j + 1
+            }
+
+            let duration = Instant.now - start
+
+            if i >= warmup {
+              let mut durations = stats.durations
+              durations.push(duration)
+              let mut total = stats.total_duration_ns
+              total = total + duration
+              stats = BenchmarkStats(
+                name: stats.name,
+                iterations: stats.iterations,
+                warmup_runs: stats.warmup_runs,
+                total_duration_ns: total,
+                durations: durations,
+              )
+            }
+
+            let _ = manager.close
+          }
+          case Error(_) -> {}
+        }
+      }
+      case Error(_) -> {}
+    }
+
+    i = i + 1
+  }
+
+  stats.format_results
+}
+
+# Benchmark: search performance with different result sizes
+# This measures the impact of reading all results vs streaming
+fn benchmark_search_result_sizes(iterations: Int = 100, warmup: Int = 10) {
+  let mut stats_small = BenchmarkStats.new(
+    "Search (10 results)",
+    iterations,
+    warmup,
+  )
+
+  let mut stats_large = BenchmarkStats.new(
+    "Search (1000 results)",
+    iterations,
+    warmup,
+  )
+
+  let test_index_path = '/tmp/bench-index'
+
+  let mut i = 0
+  while i < iterations + warmup {
+    match TantivyConfig.new(test_index_path) {
+      case Ok(config) -> {
+        let mut manager = TantivyIndexManager.new(config)
+
+        match manager.open {
+          case Ok(_) => {
+            let start_small = Instant.now
+            let _ = manager.search("test", 10, 0)
+            let duration_small = Instant.now - start_small
+
+            let start_large = Instant.now
+            let _ = manager.search("test", 1000, 0)
+            let duration_large = Instant.now - start_large
+
+            if i >= warmup {
+              let mut durations_small = stats_small.durations
+              durations_small.push(duration_small)
+              let mut total_small = stats_small.total_duration_ns
+              total_small = total_small + duration_small
+              stats_small = BenchmarkStats(
+                name: stats_small.name,
+                iterations: stats_small.iterations,
+                warmup_runs: stats_small.warmup_runs,
+                total_duration_ns: total_small,
+                durations: durations_small,
+              )
+
+              let mut durations_large = stats_large.durations
+              durations_large.push(duration_large)
+              let mut total_large = stats_large.total_duration_ns
+              total_large = total_large + duration_large
+              stats_large = BenchmarkStats(
+                name: stats_large.name,
+                iterations: stats_large.iterations,
+                warmup_runs: stats_large.warmup_runs,
+                total_duration_ns: total_large,
+                durations: durations_large,
+              )
+            }
+
+            let _ = manager.close
+          }
+          case Error(_) => {}
+        }
+      }
+      case Error(_) => {}
+    }
+
+    i = i + 1
+  }
+
+  stats_small.format_results
+  stats_large.format_results
+}
+
+fn pub main {
+  STDOUT.new.print("Inko-Tantivy Performance Benchmarks")
+  STDOUT.new.print("====================================")
+  STDOUT.new.print("")
+
+  benchmark_string_conversion
+  STDOUT.new.print("")
+
+  benchmark_batch_indexing
+  STDOUT.new.print("")
+
+  benchmark_search_result_sizes
+  STDOUT.new.print("")
+}

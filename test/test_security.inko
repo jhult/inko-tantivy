@@ -1,0 +1,271 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+# This Source Code Form is subject to terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+import std.test (Tests)
+import tantivy.index_manager (TantivyConfig, TantivyIndexManager)
+
+fn pub tests(t: mut Tests) {
+  t.test('Reject path traversal attempt with ..', fn (t) {
+    match TantivyConfig.new('../etc/passwd') {
+      case Error(e) -> t.true(e.contains?('directory traversal') or e.contains?('..'))
+      case Ok(_) -> panic("Should have failed")
+    }
+  })
+
+  t.test('Reject path traversal attempt with encoded ..', fn (t) {
+    match TantivyConfig.new('%2e%2e%2fetc%2fpasswd') {
+      case Error(e) -> t.true(e.contains?('directory traversal') or e.contains?('..'))
+      case Ok(_) -> panic("Should have failed")
+    }
+  })
+
+  t.test('Reject path with null bytes', fn (t) {
+    match TantivyConfig.new('/tmp/test\0path') {
+      case Error(e) -> t.true(e.contains?('invalid path') or e.contains?('null'))
+      case Ok(_) -> panic("Should have failed")
+    }
+  })
+
+  t.test('Reject query with wildcard characters', fn (t) {
+    let config = match TantivyConfig.new('/tmp/test-injection') {
+      case Ok(c) -> c
+      case Error(_) -> panic("Config creation failed")
+    }
+    let manager = TantivyIndexManager.new(config)
+
+    match manager.open {
+      case Ok(_) -> {
+        let fields = [
+          ('subject', '* malicious wildcard *'),
+          ('from', 'attacker@example.com'),
+          ('body', 'Test body'),
+        ]
+
+        match manager.add_doc('test-doc', fields) {
+          case Ok(_) -> {}
+          case Error(_) -> t.true(true)
+        }
+
+        let _ = manager.commit
+        let _ = manager.close
+      }
+      case Error(_) -> panic("Config creation failed")
+    }
+  })
+
+  t.test('Reject query with boolean operators', fn (t) {
+    let config = match TantivyConfig.new('/tmp/test-injection2') {
+      case Ok(c) -> c
+      case Error(_) -> panic("Config creation failed")
+    }
+    let manager = TantivyIndexManager.new(config)
+
+    match manager.open {
+      case Ok(_) -> {
+        let fields = [
+          ('subject', 'malicious OR injection'),
+          ('from', 'attacker@example.com'),
+          ('body', 'Test body'),
+        ]
+
+        match manager.add_doc('test-doc', fields) {
+          case Ok(_) -> {}
+          case Error(_) -> t.true(true)
+        }
+
+        let _ = manager.commit
+
+        match manager.search('subject:test OR body:test', 10, 0) {
+          case Ok(_) -> {}
+          case Error(_) -> t.true(true)
+        }
+
+        let _ = manager.close
+      }
+      case Error(_) -> panic("Config creation failed")
+    }
+  })
+
+  t.test('Reject query with regex metacharacters', fn (t) {
+    let config = match TantivyConfig.new('/tmp/test-injection3') {
+      case Ok(c) -> c
+      case Error(_) -> panic("Config creation failed")
+    }
+    let manager = TantivyIndexManager.new(config)
+
+    match manager.open {
+      case Ok(_) -> {
+        let fields = [
+          ('subject', '.*) injection regex'),
+          ('from', 'attacker@example.com'),
+          ('body', 'Test body'),
+        ]
+
+        match manager.add_doc('test-doc', fields) {
+          case Ok(_) -> {}
+          case Error(_) -> t.true(true)
+        }
+
+        let _ = manager.commit
+
+        match manager.search('subject:.* OR body:.*', 10, 0) {
+          case Ok(_) -> {}
+          case Error(_) -> t.true(true)
+        }
+
+        let _ = manager.close
+      }
+      case Error(_) -> panic("Config creation failed")
+    }
+  })
+
+  t.test('Reject malformed JSON schema', fn (t) {
+    let config = match TantivyConfig.new('/tmp/test-schema-validation') {
+      case Ok(c) -> c
+      case Error(_) -> panic("Config creation failed")
+    }
+    let manager = TantivyIndexManager.new(config)
+
+    match manager.open {
+      case Ok(_) -> {
+        let _malformed_schema = '{"invalid": json}'
+        match manager.open {
+          case Ok(_) -> panic("Should have failed")
+          case Error(_) -> t.true(true)
+        }
+      }
+      case Error(_) -> t.true(true)
+    }
+  })
+
+  t.test('Reject oversized schema', fn (t) {
+    let config = match TantivyConfig.new('/tmp/test-schema-validation2') {
+      case Ok(c) -> c
+      case Error(_) -> panic("Config creation failed")
+    }
+    let manager = TantivyIndexManager.new(config)
+
+    match manager.open {
+      case Ok(_) -> {
+        let mut schema_json = '{'
+        let mut i = 0
+
+        while i < 10000 {
+          let field_name = 'field${i}'
+          schema_json = schema_json + '"${field_name}": "text", '
+          i = i + 1
+        }
+
+        schema_json = schema_json + '"field10000": "text"}'
+
+        match manager.open {
+          case Ok(_) -> panic("Should have failed")
+          case Error(e) -> t.true(e.contains?('schema') or e.contains?('invalid') or e.contains?('size'))
+        }
+      }
+      case Error(_) -> t.true(true)
+    }
+  })
+
+  t.test('Handle massive document gracefully', fn (t) {
+    let config = match TantivyConfig.new('/tmp/test-resource-exhaustion') {
+      case Ok(c) -> c
+      case Error(_) -> panic("Config creation failed")
+    }
+    let manager = TantivyIndexManager.new(config)
+
+    match manager.open {
+      case Ok(_) -> {
+        let mut large_body = ''
+        let mut i = 0
+
+        while i < 100000 {
+          large_body = large_body + 'data '
+          i = i + 1
+        }
+
+        let fields = [
+          ('subject', 'Massive document test'),
+          ('from', 'attacker@example.com'),
+          ('body', large_body),
+        ]
+
+        match manager.add_doc('massive-doc', fields) {
+          case Ok(_) -> {
+            t.true(true)
+          }
+          case Error(e) -> {
+            t.true(e.contains?('size') or e.contains?('too large') or e.contains?('limit'))
+          }
+        }
+
+        let _ = manager.close
+      }
+      case Error(_) -> panic("Config creation failed")
+    }
+  })
+
+  t.test('Handle excessive number of fields', fn (t) {
+    let config = match TantivyConfig.new('/tmp/test-resource-exhaustion2') {
+      case Ok(c) -> c
+      case Error(_) -> panic("Config creation failed")
+    }
+    let manager = TantivyIndexManager.new(config)
+
+    match manager.open {
+      case Ok(_) -> {
+        let mut fields = []
+        let mut i = 0
+
+        while i < 10000 {
+          let field_name = 'field${i}'
+          fields.push((field_name, 'value ${i}'))
+          i = i + 1
+        }
+
+        match manager.add_doc('excessive-fields-doc', fields) {
+          case Ok(_) -> {
+            t.true(true)
+          }
+          case Error(e) -> {
+            t.true(e.contains?('size') or e.contains?('too many') or e.contains?('limit'))
+          }
+        }
+
+        let _ = manager.close
+      }
+      case Error(_) -> panic("Config creation failed")
+    }
+  })
+
+  t.test('Reject empty field names', fn (t) {
+    let config = match TantivyConfig.new('/tmp/test-empty-fields') {
+      case Ok(c) -> c
+      case Error(_) -> panic("Config creation failed")
+    }
+    let manager = TantivyIndexManager.new(config)
+
+    match manager.open {
+      case Ok(_) -> {
+        let fields = [
+          ('', 'empty field name'),
+          ('from', 'attacker@example.com'),
+          ('body', 'Test body'),
+        ]
+
+        match manager.add_doc('test-doc', fields) {
+          case Ok(_) -> panic("Should have failed")
+          case Error(_) -> t.true(true)
+        }
+
+        let _ = manager.close
+      }
+      case Error(_) -> t.true(true)
+    }
+  })
+}

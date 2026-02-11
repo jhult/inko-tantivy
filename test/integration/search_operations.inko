@@ -1,0 +1,442 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+#
+# Integration tests for search operations
+
+import std.test (Tests)
+import tantivy.index_manager (TantivyConfig, TantivyIndexManager)
+import tantivy.query_builder (TantivyQueryBuilder)
+import helpers (cleanup_test_index, temp_index_path)
+
+fn pub tests(t: mut Tests) {
+  # Test search functionality
+  t.test('Search with results', fn (t) {
+    let path = temp_index_path('search-001')
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> return
+    }
+    let manager = TantivyIndexManager.new(config)
+
+    match manager.open {
+      case Ok(_) -> {}
+      case Error(_) -> {
+        t.true(false)
+
+        return
+      }
+    }
+
+    # Add multiple documents
+    let docs = [
+      (
+        'doc-1',
+        [('subject', 'Important Meeting'), ('body', 'Meeting about project')],
+      ),
+      ('doc-2', [('subject', 'Lunch Plans'), ('body', 'Where should we eat')]),
+      (
+        'doc-3',
+        [('subject', 'Project Update'), ('body', 'Progress on the project')],
+      ),
+    ]
+
+    for (doc_id, fields) in docs {
+      match manager.add_doc(doc_id, fields) {
+        case Ok(_) -> {}
+        case Error(_) -> {
+          t.true(false)
+
+          return
+        }
+      }
+    }
+
+    match manager.commit {
+      case Ok(_) -> {}
+      case Error(_) -> {
+        t.true(false)
+
+        return
+      }
+    }
+
+    # Search for "project"
+    let query = TantivyQueryBuilder.new
+
+    query.search_text('subject', 'project')
+    query.search_text('body', 'project')
+
+    match manager.search(query.build, limit: 10, offset: 0) {
+      case Ok(results) -> {
+        t.true(results.size > 0)
+        t.true(results.size <= 2) # Should match doc-3 and possibly doc-1
+      }
+      case Error(_) -> {
+        # Debug:'Search failed: ${e}')
+        t.true(false)
+      }
+    }
+
+    let _ = manager.close
+
+    cleanup_test_index(path)
+  })
+
+  # Test pagination with offset
+  t.test('Search with pagination', fn (t) {
+    let path = temp_index_path('search-002')
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> return
+    }
+    let manager = TantivyIndexManager.new(config)
+
+    match manager.open {
+      case Ok(_) -> {}
+      case Error(_) -> {
+        t.true(false)
+
+        return
+      }
+    }
+
+    # Add 5 documents
+    let mut i = 0
+
+    while i < 5 {
+      let doc_id = 'doc-${i}'
+      let fields = [('subject', 'Test Document ${i}'), ('body', 'test content')]
+
+      match manager.add_doc(doc_id, fields) {
+        case Ok(_) -> {}
+        case Error(_) -> {
+          t.true(false)
+
+          return
+        }
+      }
+
+      i = i + 1
+    }
+
+    match manager.commit {
+      case Ok(_) -> {}
+      case Error(_) -> {
+        t.true(false)
+
+        return
+      }
+    }
+
+    # Test pagination: get first 2 results
+    match manager.search('test', limit: 2, offset: 0) {
+      case Ok(results) -> t.equal(results.size, 2)
+      case Error(_) -> t.true(false)
+    }
+
+    # Test pagination: get next 2 results (offset 2)
+    match manager.search('test', limit: 2, offset: 2) {
+      case Ok(results) -> t.equal(results.size, 2)
+      case Error(_) -> t.true(false)
+    }
+
+    # Test pagination: get last result (offset 4)
+    match manager.search('test', limit: 2, offset: 4) {
+      case Ok(results) -> t.equal(results.size, 1)
+      case Error(_) -> t.true(false)
+    }
+
+    let _ = manager.close
+
+    cleanup_test_index(path)
+  })
+
+  # Test empty query handling
+  t.test('Search with empty query', fn (t) {
+    let path = temp_index_path('search-003')
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> return
+    }
+    let manager = TantivyIndexManager.new(config)
+
+    match manager.open {
+      case Ok(_) -> {}
+      case Error(_) -> {
+        t.true(false)
+
+        return
+      }
+    }
+
+    let fields = [('subject', 'Test'), ('body', 'Content')]
+
+    match manager.add_doc('test-1', fields) {
+      case Ok(_) -> {}
+      case Error(_) -> {
+        t.true(false)
+
+        return
+      }
+    }
+
+    match manager.commit {
+      case Ok(_) -> {}
+      case Error(_) -> {
+        t.true(false)
+
+        return
+      }
+    }
+
+    # Empty query should match all documents
+    match manager.search('', limit: 10, offset: 0) {
+      case Ok(results) -> t.true(results.size > 0)
+      case Error(_) -> t.true(false)
+    }
+
+    let _ = manager.close
+
+    cleanup_test_index(path)
+  })
+
+  # Test special characters in queries
+  t.test('Search with special characters', fn (t) {
+    let path = temp_index_path('search-004')
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> return
+    }
+    let manager = TantivyIndexManager.new(config)
+
+    match manager.open {
+      case Ok(_) -> {}
+      case Error(_) -> {
+        t.true(false)
+
+        return
+      }
+    }
+
+    let fields = [
+      ('subject', 'Test: Special & Characters!'),
+      ('body', 'Email with special chars'),
+    ]
+
+    match manager.add_doc('special-1', fields) {
+      case Ok(_) -> {}
+      case Error(_) -> {
+        t.true(false)
+
+        return
+      }
+    }
+
+    match manager.commit {
+      case Ok(_) -> {}
+      case Error(_) -> {
+        t.true(false)
+
+        return
+      }
+    }
+
+    # Search should handle special characters gracefully
+    match manager.search('special', limit: 10, offset: 0) {
+      case Ok(results) -> t.true(results.size > 0)
+      case Error(_) -> t.true(false)
+    }
+
+    let _ = manager.close
+
+    cleanup_test_index(path)
+  })
+
+  # Test search with very large limit
+  t.test('Search with large limit', fn (t) {
+    let path = temp_index_path('search-005')
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> return
+    }
+    let mut manager = TantivyIndexManager.new(config)
+
+    match manager.open {
+      case Ok(_) -> {
+        # Add a few documents
+        let mut i = 0
+
+        while i < 5 {
+          let doc_id = 'large-limit-${i}'
+          let fields = [('subject', 'Test ${i}'), ('body', 'Content')]
+
+          match manager.add_doc(doc_id, fields) {
+            case Ok(_) -> {}
+            case Error(_) -> {
+              t.true(false)
+              return
+            }
+          }
+
+          i = i + 1
+        }
+
+        match manager.commit {
+          case Ok(_) -> {}
+          case Error(_) -> {
+            t.true(false)
+            return
+          }
+        }
+
+        # Search with very large limit
+        match manager.search('test', limit: 1000000, offset: 0) {
+          case Ok(results) -> t.equal(results.size, 5)
+          case Error(_) -> t.true(false)
+        }
+      }
+      case Error(_) -> t.true(false)
+    }
+
+    let _ = manager.close
+
+    cleanup_test_index(path)
+  })
+
+  # Test search with negative offset (should handle gracefully)
+  t.test('Search with zero offset', fn (t) {
+    let path = temp_index_path('search-006')
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> return
+    }
+    let mut manager = TantivyIndexManager.new(config)
+
+    match manager.open {
+      case Ok(_) -> {
+        let fields = [('subject', 'Test'), ('body', 'Content')]
+
+        match manager.add_doc('test-1', fields) {
+          case Ok(_) -> {}
+          case Error(_) -> {
+            t.true(false)
+            return
+          }
+        }
+
+        match manager.commit {
+          case Ok(_) -> {}
+          case Error(_) -> {
+            t.true(false)
+            return
+          }
+        }
+
+        # Search with offset 0
+        match manager.search('test', limit: 10, offset: 0) {
+          case Ok(results) -> t.true(results.size > 0)
+          case Error(_) -> t.true(false)
+        }
+      }
+      case Error(_) -> t.true(false)
+    }
+
+    let _ = manager.close
+
+    cleanup_test_index(path)
+  })
+
+  t.test('Search with limit=10000 succeeds', fn (t) {
+    let path = temp_index_path('search-007')
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> return
+    }
+    let mut manager = TantivyIndexManager.new(config)
+
+    match manager.open {
+      case Ok(_) -> {
+        # Add a document
+        let fields = [('subject', 'Test'), ('body', 'Content')]
+
+        match manager.add_doc('max-limit', fields) {
+          case Ok(_) -> {}
+          case Error(_) -> {
+            t.true(false)
+            return
+          }
+        }
+
+        match manager.commit {
+          case Ok(_) -> {}
+          case Error(_) -> {
+            t.true(false)
+            return
+          }
+        }
+
+        # Search with MAX_SEARCH_LIMIT (10000)
+        match manager.search('test', limit: 10000, offset: 0) {
+          case Ok(results) -> t.true(results.size > 0)
+          case Error(_) -> t.true(false)
+        }
+      }
+      case Error(_) -> t.true(false)
+    }
+
+    let _ = manager.close
+
+    cleanup_test_index(path)
+  })
+
+  t.test('Search with limit=10001 fails', fn (t) {
+    let path = temp_index_path('search-008')
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> return
+    }
+    let mut manager = TantivyIndexManager.new(config)
+
+    match manager.open {
+      case Ok(_) -> {
+        # Add a document
+        let fields = [('subject', 'Test'), ('body', 'Content')]
+
+        match manager.add_doc('over-limit', fields) {
+          case Ok(_) -> {}
+          case Error(_) -> {
+            t.true(false)
+            return
+          }
+        }
+
+        match manager.commit {
+          case Ok(_) -> {}
+          case Error(_) -> {
+            t.true(false)
+            return
+          }
+        }
+
+        # Search with MAX_SEARCH_LIMIT + 1 (10001)
+        match manager.search('test', limit: 10001, offset: 0) {
+          case Ok(_) -> t.true(false)
+          case Error(e) -> {
+            # Error should mention the limit
+            t.true(
+              e.contains?('10000')
+                or e.contains?('limit')
+                or e.contains?('too large'),
+            )
+          }
+        }
+      }
+      case Error(_) -> t.true(false)
+    }
+
+    let _ = manager.close
+
+    cleanup_test_index(path)
+  })
+}

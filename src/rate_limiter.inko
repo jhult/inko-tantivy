@@ -1,0 +1,141 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+# Rate limiter using token bucket algorithm with automatic time-based refill
+# This is a standalone type that can be used with any operation that needs rate limiting
+
+import std.time (Instant)
+
+type RateLimiter {
+  let mut @tokens: Float
+  let @capacity: Float
+  let @refill_rate: Float
+  let mut @last_refill: Instant
+}
+
+impl RateLimiter {
+  # Create a new rate limiter
+  #
+  # Arguments:
+  # - capacity: Maximum number of tokens the bucket can hold (burst size)
+  # - refill_rate: Number of tokens to add per second
+  #
+  # Example:
+  #   # Allow 100 requests per second with burst of 200
+  #   let limiter = RateLimiter.new(200.0, 100.0)
+  #
+  #   # Allow 10 requests per second with burst of 20
+  #   let limiter = RateLimiter.new(20.0, 10.0)
+  fn pub static new(capacity: Float, refill_rate: Float) -> RateLimiter {
+    RateLimiter(
+      tokens: capacity,
+      capacity: capacity,
+      refill_rate: refill_rate,
+      last_refill: Instant.new,
+    )
+  }
+
+  # Automatically refill tokens based on elapsed time since last refill
+  fn pub mut refill_automatically {
+    let elapsed = @last_refill.elapsed
+    let elapsed_sec = elapsed.to_secs
+
+    let tokens_to_add = @refill_rate * elapsed_sec
+
+    if tokens_to_add > 0.0 {
+      @tokens = if (@tokens + tokens_to_add) > @capacity {
+        @capacity
+      } else {
+        @tokens + tokens_to_add
+      }
+
+      @last_refill = Instant.new
+    }
+  }
+
+  # Attempt to acquire a token from the bucket
+  #
+  # Returns true if token was acquired, false if rate limit exceeded
+  #
+  # This method automatically refills tokens based on elapsed time before checking availability.
+  fn pub mut acquire_token -> Bool {
+    refill_automatically
+
+    if @tokens >= 1.0 {
+      @tokens = @tokens - 1.0
+      true
+    } else {
+      false
+    }
+  }
+
+  # Get the current number of available tokens
+  #
+  # This method does not modify the state, it only reports current tokens
+  fn pub mut available_tokens -> Float {
+    refill_automatically
+    @tokens
+  }
+
+  # Attempt to acquire multiple tokens at once
+  #
+  # Returns true if all requested tokens were acquired, false if rate limit exceeded
+  #
+  # Arguments:
+  # - count: Number of tokens to acquire
+  #
+  # Example:
+  #   # Try to acquire 5 tokens at once (useful for batch operations)
+  #   if limiter.acquire_tokens(5) {
+  #   }
+  #
+  # This method automatically refills tokens based on elapsed time before checking availability.
+  fn pub mut acquire_tokens(count: Int) -> Bool {
+    refill_automatically
+
+    let requested = count as Float
+    if @tokens >= requested {
+      @tokens = @tokens - requested
+      true
+    } else {
+      false
+    }
+  }
+
+  # Manually add tokens to the bucket
+  #
+  # This can be called externally to refill tokens based on custom logic
+  #
+  # Arguments:
+  # - tokens: Number of tokens to add
+  #
+  # Example:
+  #   # Add 10 tokens manually
+  #   limiter.refill(10.0)
+  #
+  # Note: Automatic refill is performed before manual refill to ensure consistency.
+  fn pub mut refill(tokens: Float) {
+    refill_automatically
+
+    @tokens = if (@tokens + tokens) > @capacity {
+      @capacity
+    } else {
+      @tokens + tokens
+    }
+  }
+
+  # Get the current refill rate (tokens per second)
+  #
+  # This method does not modify the state, it only reports the refill rate.
+  fn pub refill_rate -> Float {
+    @refill_rate
+  }
+
+  # Get the maximum capacity (burst size)
+  #
+  # This method does not modify the state, it only reports the capacity.
+  fn pub capacity -> Float {
+    @capacity
+  }
+}

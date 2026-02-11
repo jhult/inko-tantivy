@@ -1,0 +1,61 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+#
+# Integration tests for Tantivy FFI operations
+#
+# This module orchestrates all integration tests by importing and running
+# tests from focused sub-modules. Each sub-module contains related test cases.
+
+import integration.advanced_features
+import integration.batch_operations
+import integration.crud_operations
+import integration.edge_cases
+import integration.ffi_layout
+import integration.search_operations
+import integration.validation
+import std.test (Tests)
+import tantivy.index_manager (TantivyConfig)
+
+# Path validation tests (doesn't require FFI)
+fn test_path_validation(t: mut Tests) {
+  t.test('TantivyConfig.new accepts valid absolute path', fn (t) {
+    match TantivyConfig.new('/tmp/tantivy-test') {
+      case Ok(config) -> t.equal(config.index_path, '/tmp/tantivy-test')
+      case Error(_) -> t.true(false)
+    }
+  })
+
+  t.test('TantivyConfig.new accepts valid relative path', fn (t) {
+    match TantivyConfig.new('data/index') {
+      case Ok(config) -> t.equal(config.index_path, 'data/index')
+      case Error(_) -> t.true(false)
+    }
+  })
+}
+
+fn pub tests(t: mut Tests) {
+  # Path validation (no FFI required)
+  test_path_validation(t)
+
+  # FFI struct layout and compatibility
+  ffi_layout.tests(t)
+
+  # Core CRUD operations
+  crud_operations.tests(t)
+
+  # Search operations
+  search_operations.tests(t)
+
+  # Batch operations
+  batch_operations.tests(t)
+
+  # Advanced features (aggregation, autocomplete, did-you-mean)
+  advanced_features.tests(t)
+
+  # Edge cases
+  edge_cases.tests(t)
+
+  # Resource limit validation
+  validation.tests(t)
+}

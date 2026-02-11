@@ -1,0 +1,395 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+#
+# Integration tests for edge cases
+# These tests verify the system handles edge cases and boundary conditions gracefully.
+
+import std.test (Tests)
+import tantivy.index_manager (TantivyConfig, TantivyIndexManager)
+import helpers (cleanup_test_index, temp_index_path)
+
+fn pub tests(t: mut Tests) {
+  # Test edge case: empty doc_id
+  t.test('Handle empty doc_id', fn (t) {
+    let path = temp_index_path('edge-empty-doc-id')
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> return
+    }
+    let mut manager = TantivyIndexManager.new(config)
+
+    match manager.open {
+      case Ok(_) -> {
+        let fields = [('title', 'Test'), ('body', 'Content')]
+
+        # Empty doc_id should be rejected or handled gracefully
+        match manager.add_doc('', fields) {
+          case Ok(_) -> {
+            # If accepted, verify we can retrieve it
+            match manager.get_doc('') {
+              case Ok(_) -> t.true(true)
+              case Error(_) -> t.true(true) # Either outcome is acceptable
+            }
+          }
+          case Error(_) -> t.true(true) # Rejection is acceptable
+        }
+      }
+      case Error(_) -> t.true(false)
+    }
+
+    let _ = manager.close
+
+    cleanup_test_index(path)
+  })
+
+  # Test edge case: very long field values
+  t.test('Handle very long field values', fn (t) {
+    let path = temp_index_path('edge-very-long-fields')
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> return
+    }
+    let mut manager = TantivyIndexManager.new(config)
+
+    match manager.open {
+      case Ok(_) -> {
+        # Create a 5KB field value (should fit in 4KB buffer after truncation)
+        let mut long_value = ''
+        let mut i = 0
+
+        while i < 5000 {
+          long_value = long_value + 'x'
+          i = i + 1
+        }
+
+        let fields = [('title', 'Long Test'), ('body', long_value)]
+
+        match manager.add_doc('long-doc', fields) {
+          case Ok(_) -> {
+            match manager.commit {
+              case Ok(_) -> {
+                # Verify document was indexed and is searchable
+                match manager.search('Long', 10, 0) {
+                  case Ok(results) -> t.true(results.size > 0)
+                  case Error(_) -> t.true(false)
+                }
+              }
+              case Error(_) -> t.true(false)
+            }
+          }
+          case Error(_) -> t.true(false)
+        }
+      }
+      case Error(_) -> t.true(false)
+    }
+
+    let _ = manager.close
+
+    cleanup_test_index(path)
+  })
+
+  # Test edge case: rollback verification with search
+  t.test('Verify rollback prevents document from being searchable', fn (t) {
+    let path = temp_index_path('edge-rollback-searchable')
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> return
+    }
+    let mut manager = TantivyIndexManager.new(config)
+
+    match manager.open {
+      case Ok(_) -> {
+        # Add and commit a document first
+        let fields1 = [('title', 'Committed'), ('body', 'This should be found')]
+
+        match manager.add_doc('committed-doc', fields1) {
+          case Ok(_) -> {
+            match manager.commit {
+              case Ok(_) -> {
+                # Add another document but rollback
+                let fields2 = [
+                  ('title', 'Rolled Back'),
+                  ('body', 'This should NOT be found'),
+                ]
+
+                match manager.add_doc('rollback-doc', fields2) {
+                  case Ok(_) -> {
+                    match manager.rollback {
+                      case Ok(_) -> {
+                        # Search for committed doc - should be found
+                        match manager.search('Committed', 10, 0) {
+                          case Ok(results) -> t.true(results.size == 1)
+                          case Error(_) -> t.true(false)
+                        }
+
+                        # Search for rolled back doc - should NOT be found
+                        match manager.search('Rolled', 10, 0) {
+                          case Ok(results) -> t.true(results.size == 0)
+                          case Error(_) -> t.true(false)
+                        }
+                      }
+                      case Error(_) -> t.true(false)
+                    }
+                  }
+                  case Error(_) -> t.true(false)
+                }
+              }
+              case Error(_) -> t.true(false)
+            }
+          }
+          case Error(_) -> t.true(false)
+        }
+      }
+      case Error(_) -> t.true(false)
+    }
+
+    let _ = manager.close
+
+    cleanup_test_index(path)
+  })
+
+  # Test edge case: search with empty query
+  t.test('Handle empty search query', fn (t) {
+    let path = temp_index_path('edge-empty-search-query')
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> return
+    }
+    let mut manager = TantivyIndexManager.new(config)
+
+    match manager.open {
+      case Ok(_) -> {
+        let fields = [('title', 'Test'), ('body', 'Content')]
+
+        match manager.add_doc('test-doc', fields) {
+          case Ok(_) -> {
+            match manager.commit {
+              case Ok(_) -> {
+                # Empty query should either return all docs or error gracefully
+                match manager.search('', 10, 0) {
+                  case Ok(_) -> t.true(true) # Any result is acceptable
+                  case Error(_) -> t.true(true) # Error is also acceptable
+                }
+              }
+              case Error(_) -> t.true(false)
+            }
+          }
+          case Error(_) -> t.true(false)
+        }
+      }
+      case Error(_) -> t.true(false)
+    }
+
+    let _ = manager.close
+
+    cleanup_test_index(path)
+  })
+
+  # Test empty field values handling
+  t.test('Handle empty field values', fn (t) {
+    let path = temp_index_path('edge-empty-field-values')
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> return
+    }
+    let mut manager = TantivyIndexManager.new(config)
+
+    match manager.open {
+      case Ok(_) -> {
+        # Add document with empty field values
+        let fields = [('subject', ''), ('body', '')]
+
+        match manager.add_doc('empty-fields', fields) {
+          case Ok(_) -> {}
+          case Error(_) -> {
+            t.true(false)
+            return
+          }
+        }
+
+        match manager.commit {
+          case Ok(_) -> {}
+          case Error(_) -> {
+            t.true(false)
+            return
+          }
+        }
+
+        # Should be able to retrieve the document
+        match manager.get_doc('empty-fields') {
+          case Ok(_) -> t.true(true)
+          case Error(_) -> t.true(false)
+        }
+      }
+      case Error(_) -> t.true(false)
+    }
+
+    let _ = manager.close
+
+    cleanup_test_index(path)
+  })
+
+  # Test large field value (but within buffer size)
+  t.test('Handle large field value within buffer', fn (t) {
+    let path = temp_index_path('edge-large-field-within-buffer')
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> return
+    }
+    let mut manager = TantivyIndexManager.new(config)
+
+    match manager.open {
+      case Ok(_) -> {
+        # Create a large value (but under 1MB buffer)
+        let mut large_value = ''
+        let mut i = 0
+
+        while i < 1000 {
+          large_value = large_value + 'This is a test sentence. '
+          i = i + 1
+        }
+
+        let fields = [('subject', 'Large Field'), ('body', large_value)]
+
+        match manager.add_doc('large-field', fields) {
+          case Ok(_) -> {}
+          case Error(_) -> {
+            t.true(false)
+            return
+          }
+        }
+
+        match manager.commit {
+          case Ok(_) -> {}
+          case Error(_) -> {
+            t.true(false)
+            return
+          }
+        }
+
+        # Should be able to retrieve and search
+        match manager.get_doc('large-field') {
+          case Ok(doc) -> t.true(doc.contains?('Large Field'))
+          case Error(_) -> t.true(false)
+        }
+      }
+      case Error(_) -> t.true(false)
+    }
+
+    let _ = manager.close
+
+    cleanup_test_index(path)
+  })
+
+  # Test Unicode characters in queries and fields
+  t.test('Handle Unicode characters', fn (t) {
+    let path = temp_index_path('edge-unicode-characters')
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> return
+    }
+    let mut manager = TantivyIndexManager.new(config)
+
+    match manager.open {
+      case Ok(_) -> {
+        # Add document with Unicode characters
+        let fields = [('subject', 'Тестовое сообщение'), ('body', '测试内容')]
+
+        match manager.add_doc('unicode-test', fields) {
+          case Ok(_) -> {}
+          case Error(_) -> {
+            t.true(false)
+            return
+          }
+        }
+
+        match manager.commit {
+          case Ok(_) -> {}
+          case Error(_) -> {
+            t.true(false)
+            return
+          }
+        }
+
+        # Should be able to retrieve
+        match manager.get_doc('unicode-test') {
+          case Ok(_) -> t.true(true)
+          case Error(_) -> t.true(false)
+        }
+      }
+      case Error(_) -> t.true(false)
+    }
+
+    let _ = manager.close
+
+    cleanup_test_index(path)
+  })
+
+  # Test delete_by_account_folder
+  t.test('Delete documents by account and folder', fn (t) {
+    let path = temp_index_path('edge-delete-by-account-folder')
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> return
+    }
+    let mut manager = TantivyIndexManager.new(config)
+
+    match manager.open {
+      case Ok(_) -> {
+        # Add documents with account:folder:uid format
+        let mut i = 0
+
+        while i < 5 {
+          let doc_id = 'account1:folder1:${i}'
+          let fields = [('subject', 'Test ${i}'), ('body', 'Content')]
+
+          match manager.add_doc(doc_id, fields) {
+            case Ok(_) -> {}
+            case Error(_) -> {
+              t.true(false)
+              return
+            }
+          }
+
+          i = i + 1
+        }
+
+        match manager.commit {
+          case Ok(_) -> {}
+          case Error(_) -> {
+            t.true(false)
+            return
+          }
+        }
+
+        # Delete specific folder
+        let uids = [0, 2, 4]
+
+        match manager.delete_by_account_folder('account1', 'folder1', uids) {
+          case Ok(count) -> t.equal(count, 3)
+          case Error(_) -> t.true(false)
+        }
+
+        match manager.commit {
+          case Ok(_) -> {}
+          case Error(_) -> {
+            t.true(false)
+            return
+          }
+        }
+
+        # Verify documents are deleted
+        match manager.get_doc('account1:folder1:0') {
+          case Ok(doc) -> t.true(doc.size == 0 or doc == '{}')
+          case Error(_) -> t.true(true)
+        }
+      }
+      case Error(_) -> t.true(false)
+    }
+
+    let _ = manager.close
+
+    cleanup_test_index(path)
+  })
+}
