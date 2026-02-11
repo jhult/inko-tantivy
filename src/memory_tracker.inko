@@ -234,7 +234,9 @@ impl MemoryTracker {
     if @allocations > 0 {
       let avg_bytes = @bytes_allocated / @allocations
 
-      let _ = Stdout.new.print('  Average allocation size: ${format_bytes(avg_bytes)}')
+      let _ = Stdout.new.print(
+        '  Average allocation size: ${format_bytes(avg_bytes)}',
+      )
     }
 
     let _ = Stdout.new.print('')
