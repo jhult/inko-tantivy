@@ -6,6 +6,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+import helpers (cleanup_test_index, temp_index_path)
 import std.test (Tests)
 import tantivy.index_manager (TantivyConfig, TantivyIndexManager)
 
@@ -30,15 +31,14 @@ fn pub tests(t: mut Tests) {
 
   t.test('Reject path with null bytes', fn (t) {
     match TantivyConfig.new('') {
-      case Error(e) -> {
-        t.true(e.contains?('empty'))
-      }
+      case Error(e) -> t.true(e.contains?('empty'))
       case Ok(_) -> panic('Should have failed')
     }
   })
 
   t.test('Reject query with wildcard characters', fn (t) {
-    let config = match TantivyConfig.new('/tmp/test-injection') {
+    let path = temp_index_path('security-wildcard')
+    let config = match TantivyConfig.new(path) {
       case Ok(c) -> c
       case Error(_) -> panic('Config creation failed')
     }
@@ -62,10 +62,13 @@ fn pub tests(t: mut Tests) {
       }
       case Error(_) -> panic('Config creation failed')
     }
+
+    cleanup_test_index(path)
   })
 
   t.test('Reject query with boolean operators', fn (t) {
-    let config = match TantivyConfig.new('/tmp/test-injection2') {
+    let path = temp_index_path('security-boolean')
+    let config = match TantivyConfig.new(path) {
       case Ok(c) -> c
       case Error(_) -> panic('Config creation failed')
     }
@@ -95,10 +98,13 @@ fn pub tests(t: mut Tests) {
       }
       case Error(_) -> panic('Config creation failed')
     }
+
+    cleanup_test_index(path)
   })
 
   t.test('Reject query with regex metacharacters', fn (t) {
-    let config = match TantivyConfig.new('/tmp/test-injection3') {
+    let path = temp_index_path('security-regex')
+    let config = match TantivyConfig.new(path) {
       case Ok(c) -> c
       case Error(_) -> panic('Config creation failed')
     }
@@ -128,10 +134,13 @@ fn pub tests(t: mut Tests) {
       }
       case Error(_) -> panic('Config creation failed')
     }
+
+    cleanup_test_index(path)
   })
 
   t.test('Reject malformed JSON schema', fn (t) {
-    let config = match TantivyConfig.new('/tmp/test-schema-validation') {
+    let path = temp_index_path('security-schema-malformed')
+    let config = match TantivyConfig.new(path) {
       case Ok(c) -> c
       case Error(_) -> panic('Config creation failed')
     }
@@ -148,10 +157,15 @@ fn pub tests(t: mut Tests) {
       }
       case Error(_) -> t.true(true)
     }
+
+    let _ = manager.close
+
+    cleanup_test_index(path)
   })
 
   t.test('Reject oversized schema', fn (t) {
-    let config = match TantivyConfig.new('/tmp/test-schema-validation2') {
+    let path = temp_index_path('security-schema-oversized')
+    let config = match TantivyConfig.new(path) {
       case Ok(c) -> c
       case Error(_) -> panic('Config creation failed')
     }
@@ -184,10 +198,15 @@ fn pub tests(t: mut Tests) {
       }
       case Error(_) -> t.true(true)
     }
+
+    let _ = manager.close
+
+    cleanup_test_index(path)
   })
 
   t.test('Handle massive document gracefully', fn (t) {
-    let config = match TantivyConfig.new('/tmp/test-resource-exhaustion') {
+    let path = temp_index_path('security-massive-doc')
+    let config = match TantivyConfig.new(path) {
       case Ok(c) -> c
       case Error(_) -> panic('Config creation failed')
     }
@@ -224,10 +243,13 @@ fn pub tests(t: mut Tests) {
       }
       case Error(_) -> panic('Config creation failed')
     }
+
+    cleanup_test_index(path)
   })
 
   t.test('Handle excessive number of fields', fn (t) {
-    let config = match TantivyConfig.new('/tmp/test-resource-exhaustion2') {
+    let path = temp_index_path('security-excessive-fields')
+    let config = match TantivyConfig.new(path) {
       case Ok(c) -> c
       case Error(_) -> panic('Config creation failed')
     }
@@ -260,10 +282,13 @@ fn pub tests(t: mut Tests) {
       }
       case Error(_) -> panic('Config creation failed')
     }
+
+    cleanup_test_index(path)
   })
 
   t.test('Reject empty field names', fn (t) {
-    let config = match TantivyConfig.new('/tmp/test-empty-fields') {
+    let path = temp_index_path('security-empty-fields')
+    let config = match TantivyConfig.new(path) {
       case Ok(c) -> c
       case Error(_) -> panic('Config creation failed')
     }
@@ -286,5 +311,7 @@ fn pub tests(t: mut Tests) {
       }
       case Error(_) -> t.true(true)
     }
+
+    cleanup_test_index(path)
   })
 }

@@ -581,7 +581,9 @@ impl TantivyIndexManager {
       case Some(idx) -> {
         # Validate field names (values are validated in FFI layer)
         for (field_name, _) in fields.iter {
-          if field_name.size == 0 { return Result.Error('Field name cannot be empty') }
+          if field_name.size == 0 {
+            return Result.Error('Field name cannot be empty')
+          }
         }
 
         # Convert doc_id to C string
@@ -1458,7 +1460,7 @@ impl TantivyIndexManager {
   }
 }
 
- impl Drop for TantivyIndexManager {
+impl Drop for TantivyIndexManager {
   fn mut drop {
     match @index {
       case Some(idx) -> {

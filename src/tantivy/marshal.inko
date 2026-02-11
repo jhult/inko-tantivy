@@ -112,7 +112,9 @@ fn pub read_optional_string_field(
 
 # Helper: Create field array for document indexing
 # Returns (ByteArray, Array[String]) where the array keeps strings alive during FFI call
-fn pub create_field_array(fields: Array[(String, String)]) -> (ByteArray, Array[String]) {
+fn pub create_field_array(
+  fields: Array[(String, String)],
+) -> (ByteArray, Array[String]) {
   let array_size = fields.size * FIELD_SIZE
   let buf = ByteArray.filled(with: 0, times: array_size)
   let mut strings = []

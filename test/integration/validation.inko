@@ -20,7 +20,10 @@ fn pub tests(t: mut Tests) {
     let path = temp_index_path('validation-001')
     let config = match TantivyConfig.new(path) {
       case Ok(c) -> c
-      case Error(_) -> return
+      case Error(_) -> {
+        cleanup_test_index(path)
+        return
+      }
     }
     let mut manager = TantivyIndexManager.new(config)
 
@@ -53,7 +56,10 @@ fn pub tests(t: mut Tests) {
     let path = temp_index_path('validation-002')
     let config = match TantivyConfig.new(path) {
       case Ok(c) -> c
-      case Error(_) -> return
+      case Error(_) -> {
+        cleanup_test_index(path)
+        return
+      }
     }
     let mut manager = TantivyIndexManager.new(config)
 
@@ -93,7 +99,10 @@ fn pub tests(t: mut Tests) {
     let path = temp_index_path('validation-003')
     let config = match TantivyConfig.new(path) {
       case Ok(c) -> c
-      case Error(_) -> return
+      case Error(_) -> {
+        cleanup_test_index(path)
+        return
+      }
     }
     let mut manager = TantivyIndexManager.new(config)
 
@@ -127,7 +136,10 @@ fn pub tests(t: mut Tests) {
     let path = temp_index_path('validation-004')
     let config = match TantivyConfig.new(path) {
       case Ok(c) -> c
-      case Error(_) -> return
+      case Error(_) -> {
+        cleanup_test_index(path)
+        return
+      }
     }
     let mut manager = TantivyIndexManager.new(config)
 
