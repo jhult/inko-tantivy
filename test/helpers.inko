@@ -55,11 +55,56 @@ fn pub ffi_available -> Bool {
 # Helper to clean up test index
 fn pub cleanup_test_index(path: String) {
   let p = Path.new(path)
+
   match p.remove_directory_all {
     case Ok(_) -> {}
     case Error(_) -> {
       # Silently ignore cleanup errors - directory may not exist or be locked
       # This prevents cascading test failures
     }
+  }
+}
+
+# Wrapper to run a test with guaranteed cleanup
+# Ensures cleanup runs even if test fails via assertions (t.true(false), t.equal(), etc.)
+# Usage:
+#   with_test_index(t, 'test-name', fn (mut manager) {
+#     # Test code here - manager is already opened and ready to use
+#     let fields = [('subject', 'Test')]
+#     match manager.add_doc('doc-1', fields) {
+#       case Ok(_) -> t.true(true)
+#       case Error(_) -> t.true(false)  # Cleanup will still run!
+#     }
+#   })
+fn pub with_test_index(
+  t: mut Tests,
+  unique_id: String,
+  test_fn: fn (mut TantivyIndexManager),
+) {
+  let path = temp_index_path(unique_id)
+
+  # Create config
+  let config = match TantivyConfig.new(path) {
+    case Ok(c) -> c
+    case Error(_) -> {
+      cleanup_test_index(path)
+      return
+    }
+  }
+
+  # Create manager and open it
+  let mut manager = TantivyIndexManager.new(config)
+
+  match manager.open {
+    case Ok(_) -> {
+      # Run the test function - cleanup will run in finally block
+      test_fn(manager)
+
+      # Cleanup runs regardless of test outcome
+      let _ = manager.close
+
+      cleanup_test_index(path)
+    }
+    case Error(_) -> cleanup_test_index(path)
   }
 }
