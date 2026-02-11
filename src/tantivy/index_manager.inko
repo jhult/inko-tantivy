@@ -435,7 +435,7 @@ impl TantivyConfig {
   # Convert to C struct format (ByteArray for manual memory layout)
   # Returns both the struct and the string buffers that must be kept alive
   # during the FFI call
-  fn to_c_struct -> (ByteArray, Array[ByteArray]) {
+  fn to_c_struct -> (ByteArray, Array[String]) {
     let buf = ByteArray.filled(with: 0, times: CONFIG_SIZE)
     let mut buffers = []
 
@@ -570,12 +570,17 @@ impl TantivyIndexManager {
   ) -> Result[Bool, String] {
     match @index {
       case Some(idx) -> {
+        # Validate field names (values are validated in FFI layer)
+        for (field_name, _) in fields.iter {
+          if field_name.size == 0 { return Result.Error('Field name cannot be empty') }
+        }
+
         # Convert doc_id to C string
         let doc_id_buf = string_to_c_buffer(doc_id)
 
         # Create field array
         let field_count = fields.size
-        let fields_buf = create_field_array(fields)
+        let (fields_buf, _strings) = create_field_array(fields)
         let fields_ptr = fields_buf.pointer
 
         let (_error_out_storage, error_out_ptr) = allocate_error_output
