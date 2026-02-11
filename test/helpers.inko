@@ -54,5 +54,12 @@ fn pub ffi_available -> Bool {
 
 # Helper to clean up test index
 fn pub cleanup_test_index(path: String) {
-  Path.new(path).remove_directory_all
+  let p = Path.new(path)
+  match p.remove_directory_all {
+    case Ok(_) -> {}
+    case Error(_) -> {
+      # Silently ignore cleanup errors - directory may not exist or be locked
+      # This prevents cascading test failures
+    }
+  }
 }
