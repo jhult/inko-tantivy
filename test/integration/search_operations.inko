@@ -1,4 +1,4 @@
-# This Source Code Form is subject to the terms of the Mozilla Public
+# This Source Code Form is subject to terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 #
@@ -15,7 +15,10 @@ fn pub tests(t: mut Tests) {
     let path = temp_index_path('search-001')
     let config = match TantivyConfig.new(path) {
       case Ok(c) -> c
-      case Error(_) -> return
+      case Error(_) -> {
+        cleanup_test_index(path)
+        return
+      }
     }
     let manager = TantivyIndexManager.new(config)
 
@@ -24,6 +27,9 @@ fn pub tests(t: mut Tests) {
       case Error(_) -> {
         t.true(false)
 
+        let _ = manager.close
+
+        cleanup_test_index(path)
         return
       }
     }
@@ -47,6 +53,9 @@ fn pub tests(t: mut Tests) {
         case Error(_) -> {
           t.true(false)
 
+          let _ = manager.close
+
+          cleanup_test_index(path)
           return
         }
       }
@@ -57,6 +66,9 @@ fn pub tests(t: mut Tests) {
       case Error(_) -> {
         t.true(false)
 
+        let _ = manager.close
+
+        cleanup_test_index(path)
         return
       }
     }
@@ -88,7 +100,10 @@ fn pub tests(t: mut Tests) {
     let path = temp_index_path('search-002')
     let config = match TantivyConfig.new(path) {
       case Ok(c) -> c
-      case Error(_) -> return
+      case Error(_) -> {
+        cleanup_test_index(path)
+        return
+      }
     }
     let manager = TantivyIndexManager.new(config)
 
@@ -97,6 +112,9 @@ fn pub tests(t: mut Tests) {
       case Error(_) -> {
         t.true(false)
 
+        let _ = manager.close
+
+        cleanup_test_index(path)
         return
       }
     }
@@ -113,6 +131,9 @@ fn pub tests(t: mut Tests) {
         case Error(_) -> {
           t.true(false)
 
+          let _ = manager.close
+
+          cleanup_test_index(path)
           return
         }
       }
@@ -125,6 +146,9 @@ fn pub tests(t: mut Tests) {
       case Error(_) -> {
         t.true(false)
 
+        let _ = manager.close
+
+        cleanup_test_index(path)
         return
       }
     }
@@ -157,7 +181,10 @@ fn pub tests(t: mut Tests) {
     let path = temp_index_path('search-003')
     let config = match TantivyConfig.new(path) {
       case Ok(c) -> c
-      case Error(_) -> return
+      case Error(_) -> {
+        cleanup_test_index(path)
+        return
+      }
     }
     let manager = TantivyIndexManager.new(config)
 
@@ -166,6 +193,9 @@ fn pub tests(t: mut Tests) {
       case Error(_) -> {
         t.true(false)
 
+        let _ = manager.close
+
+        cleanup_test_index(path)
         return
       }
     }
@@ -177,6 +207,9 @@ fn pub tests(t: mut Tests) {
       case Error(_) -> {
         t.true(false)
 
+        let _ = manager.close
+
+        cleanup_test_index(path)
         return
       }
     }
@@ -186,6 +219,9 @@ fn pub tests(t: mut Tests) {
       case Error(_) -> {
         t.true(false)
 
+        let _ = manager.close
+
+        cleanup_test_index(path)
         return
       }
     }
@@ -206,7 +242,10 @@ fn pub tests(t: mut Tests) {
     let path = temp_index_path('search-004')
     let config = match TantivyConfig.new(path) {
       case Ok(c) -> c
-      case Error(_) -> return
+      case Error(_) -> {
+        cleanup_test_index(path)
+        return
+      }
     }
     let manager = TantivyIndexManager.new(config)
 
@@ -215,6 +254,9 @@ fn pub tests(t: mut Tests) {
       case Error(_) -> {
         t.true(false)
 
+        let _ = manager.close
+
+        cleanup_test_index(path)
         return
       }
     }
@@ -229,6 +271,9 @@ fn pub tests(t: mut Tests) {
       case Error(_) -> {
         t.true(false)
 
+        let _ = manager.close
+
+        cleanup_test_index(path)
         return
       }
     }
@@ -238,6 +283,9 @@ fn pub tests(t: mut Tests) {
       case Error(_) -> {
         t.true(false)
 
+        let _ = manager.close
+
+        cleanup_test_index(path)
         return
       }
     }
@@ -258,7 +306,10 @@ fn pub tests(t: mut Tests) {
     let path = temp_index_path('search-005')
     let config = match TantivyConfig.new(path) {
       case Ok(c) -> c
-      case Error(_) -> return
+      case Error(_) -> {
+        cleanup_test_index(path)
+        return
+      }
     }
     let mut manager = TantivyIndexManager.new(config)
 
@@ -275,6 +326,10 @@ fn pub tests(t: mut Tests) {
             case Ok(_) -> {}
             case Error(_) -> {
               t.true(false)
+
+              let _ = manager.close
+
+              cleanup_test_index(path)
               return
             }
           }
@@ -286,6 +341,10 @@ fn pub tests(t: mut Tests) {
           case Ok(_) -> {}
           case Error(_) -> {
             t.true(false)
+
+            let _ = manager.close
+
+            cleanup_test_index(path)
             return
           }
         }
@@ -309,7 +368,10 @@ fn pub tests(t: mut Tests) {
     let path = temp_index_path('search-006')
     let config = match TantivyConfig.new(path) {
       case Ok(c) -> c
-      case Error(_) -> return
+      case Error(_) -> {
+        cleanup_test_index(path)
+        return
+      }
     }
     let mut manager = TantivyIndexManager.new(config)
 
@@ -321,6 +383,10 @@ fn pub tests(t: mut Tests) {
           case Ok(_) -> {}
           case Error(_) -> {
             t.true(false)
+
+            let _ = manager.close
+
+            cleanup_test_index(path)
             return
           }
         }
@@ -329,6 +395,10 @@ fn pub tests(t: mut Tests) {
           case Ok(_) -> {}
           case Error(_) -> {
             t.true(false)
+
+            let _ = manager.close
+
+            cleanup_test_index(path)
             return
           }
         }
@@ -351,7 +421,10 @@ fn pub tests(t: mut Tests) {
     let path = temp_index_path('search-007')
     let config = match TantivyConfig.new(path) {
       case Ok(c) -> c
-      case Error(_) -> return
+      case Error(_) -> {
+        cleanup_test_index(path)
+        return
+      }
     }
     let mut manager = TantivyIndexManager.new(config)
 
@@ -364,6 +437,10 @@ fn pub tests(t: mut Tests) {
           case Ok(_) -> {}
           case Error(_) -> {
             t.true(false)
+
+            let _ = manager.close
+
+            cleanup_test_index(path)
             return
           }
         }
@@ -372,6 +449,10 @@ fn pub tests(t: mut Tests) {
           case Ok(_) -> {}
           case Error(_) -> {
             t.true(false)
+
+            let _ = manager.close
+
+            cleanup_test_index(path)
             return
           }
         }
@@ -394,7 +475,10 @@ fn pub tests(t: mut Tests) {
     let path = temp_index_path('search-008')
     let config = match TantivyConfig.new(path) {
       case Ok(c) -> c
-      case Error(_) -> return
+      case Error(_) -> {
+        cleanup_test_index(path)
+        return
+      }
     }
     let mut manager = TantivyIndexManager.new(config)
 
@@ -407,6 +491,10 @@ fn pub tests(t: mut Tests) {
           case Ok(_) -> {}
           case Error(_) -> {
             t.true(false)
+
+            let _ = manager.close
+
+            cleanup_test_index(path)
             return
           }
         }
@@ -415,6 +503,10 @@ fn pub tests(t: mut Tests) {
           case Ok(_) -> {}
           case Error(_) -> {
             t.true(false)
+
+            let _ = manager.close
+
+            cleanup_test_index(path)
             return
           }
         }
