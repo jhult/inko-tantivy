@@ -15,7 +15,10 @@ fn pub tests(t: mut Tests) {
     let path = temp_index_path('edge-empty-doc-id')
     let config = match TantivyConfig.new(path) {
       case Ok(c) -> c
-      case Error(_) -> return
+      case Error(_) -> {
+        cleanup_test_index(path)
+        return
+      }
     }
     let mut manager = TantivyIndexManager.new(config)
 
@@ -48,7 +51,10 @@ fn pub tests(t: mut Tests) {
     let path = temp_index_path('edge-very-long-fields')
     let config = match TantivyConfig.new(path) {
       case Ok(c) -> c
-      case Error(_) -> return
+      case Error(_) -> {
+        cleanup_test_index(path)
+        return
+      }
     }
     let mut manager = TantivyIndexManager.new(config)
 
@@ -94,7 +100,10 @@ fn pub tests(t: mut Tests) {
     let path = temp_index_path('edge-rollback-searchable')
     let config = match TantivyConfig.new(path) {
       case Ok(c) -> c
-      case Error(_) -> return
+      case Error(_) -> {
+        cleanup_test_index(path)
+        return
+      }
     }
     let mut manager = TantivyIndexManager.new(config)
 
@@ -154,7 +163,10 @@ fn pub tests(t: mut Tests) {
     let path = temp_index_path('edge-empty-search-query')
     let config = match TantivyConfig.new(path) {
       case Ok(c) -> c
-      case Error(_) -> return
+      case Error(_) -> {
+        cleanup_test_index(path)
+        return
+      }
     }
     let mut manager = TantivyIndexManager.new(config)
 
@@ -191,7 +203,10 @@ fn pub tests(t: mut Tests) {
     let path = temp_index_path('edge-empty-field-values')
     let config = match TantivyConfig.new(path) {
       case Ok(c) -> c
-      case Error(_) -> return
+      case Error(_) -> {
+        cleanup_test_index(path)
+        return
+      }
     }
     let mut manager = TantivyIndexManager.new(config)
 
@@ -204,6 +219,10 @@ fn pub tests(t: mut Tests) {
           case Ok(_) -> {}
           case Error(_) -> {
             t.true(false)
+
+            let _ = manager.close
+
+            cleanup_test_index(path)
             return
           }
         }
@@ -212,6 +231,10 @@ fn pub tests(t: mut Tests) {
           case Ok(_) -> {}
           case Error(_) -> {
             t.true(false)
+
+            let _ = manager.close
+
+            cleanup_test_index(path)
             return
           }
         }
@@ -235,7 +258,10 @@ fn pub tests(t: mut Tests) {
     let path = temp_index_path('edge-large-field-within-buffer')
     let config = match TantivyConfig.new(path) {
       case Ok(c) -> c
-      case Error(_) -> return
+      case Error(_) -> {
+        cleanup_test_index(path)
+        return
+      }
     }
     let mut manager = TantivyIndexManager.new(config)
 
@@ -256,6 +282,10 @@ fn pub tests(t: mut Tests) {
           case Ok(_) -> {}
           case Error(_) -> {
             t.true(false)
+
+            let _ = manager.close
+
+            cleanup_test_index(path)
             return
           }
         }
@@ -264,6 +294,10 @@ fn pub tests(t: mut Tests) {
           case Ok(_) -> {}
           case Error(_) -> {
             t.true(false)
+
+            let _ = manager.close
+
+            cleanup_test_index(path)
             return
           }
         }
@@ -287,7 +321,10 @@ fn pub tests(t: mut Tests) {
     let path = temp_index_path('edge-unicode-characters')
     let config = match TantivyConfig.new(path) {
       case Ok(c) -> c
-      case Error(_) -> return
+      case Error(_) -> {
+        cleanup_test_index(path)
+        return
+      }
     }
     let mut manager = TantivyIndexManager.new(config)
 
@@ -300,6 +337,10 @@ fn pub tests(t: mut Tests) {
           case Ok(_) -> {}
           case Error(_) -> {
             t.true(false)
+
+            let _ = manager.close
+
+            cleanup_test_index(path)
             return
           }
         }
@@ -308,6 +349,10 @@ fn pub tests(t: mut Tests) {
           case Ok(_) -> {}
           case Error(_) -> {
             t.true(false)
+
+            let _ = manager.close
+
+            cleanup_test_index(path)
             return
           }
         }
@@ -331,7 +376,10 @@ fn pub tests(t: mut Tests) {
     let path = temp_index_path('edge-delete-by-account-folder')
     let config = match TantivyConfig.new(path) {
       case Ok(c) -> c
-      case Error(_) -> return
+      case Error(_) -> {
+        cleanup_test_index(path)
+        return
+      }
     }
     let mut manager = TantivyIndexManager.new(config)
 
@@ -348,6 +396,10 @@ fn pub tests(t: mut Tests) {
             case Ok(_) -> {}
             case Error(_) -> {
               t.true(false)
+
+              let _ = manager.close
+
+              cleanup_test_index(path)
               return
             }
           }
@@ -359,6 +411,10 @@ fn pub tests(t: mut Tests) {
           case Ok(_) -> {}
           case Error(_) -> {
             t.true(false)
+
+            let _ = manager.close
+
+            cleanup_test_index(path)
             return
           }
         }
@@ -375,6 +431,10 @@ fn pub tests(t: mut Tests) {
           case Ok(_) -> {}
           case Error(_) -> {
             t.true(false)
+
+            let _ = manager.close
+
+            cleanup_test_index(path)
             return
           }
         }
