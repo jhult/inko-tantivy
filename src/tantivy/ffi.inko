@@ -87,7 +87,10 @@ fn pub extern tantivy_index_open(
   error_out: Pointer[UInt8],
 ) -> Pointer[UInt8]
 
-fn pub extern tantivy_index_close(index: Pointer[UInt8]) -> Int32
+fn pub extern tantivy_index_close(
+  index: Pointer[UInt8],
+  error_out: Pointer[UInt8],
+) -> Int32
 
 fn pub extern tantivy_index_add_doc(
   index: Pointer[UInt8],

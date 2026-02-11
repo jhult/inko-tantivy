@@ -536,19 +536,28 @@ impl TantivyIndexManager {
   fn pub mut close -> Result[Bool, String] {
     match @index {
       case Some(idx) -> {
-        let result = tantivy_index_close(idx)
+        let (_error_out_storage, error_out_ptr) = allocate_error_output
+
+        write_usize(error_out_ptr, 0)
+
+        let result = tantivy_index_close(idx, error_out_ptr)
 
         @index = Option.None
 
-        if (result as Int) == 0 {
-          Result.Ok(true)
-        } else {
-          Result.Error(
-            'Failed to close Tantivy index at path: ${@config.index_path}. '
-              + 'This may indicate a resource leak or data corruption. '
-              + 'The index may have been corrupted during the last operation. '
-              + 'Action: Check for disk space issues or I/O errors.',
-          )
+        match check_ffi_error(error_out_ptr) {
+          case Error(e) -> Result.Error(e)
+          case Ok(_) -> {
+            if (result as Int) == 0 {
+              Result.Ok(true)
+            } else {
+              Result.Error(
+                'Failed to close Tantivy index at path: ${@config.index_path}. '
+                  + 'This may indicate a resource leak or data corruption. '
+                  + 'The index may have been corrupted during the last operation. '
+                  + 'Action: Check for disk space issues or I/O errors.',
+              )
+            }
+          }
         }
       }
       case None -> Result.Ok(true)
@@ -1449,11 +1458,15 @@ impl TantivyIndexManager {
   }
 }
 
-impl Drop for TantivyIndexManager {
+ impl Drop for TantivyIndexManager {
   fn mut drop {
     match @index {
       case Some(idx) -> {
-        let result = tantivy_index_close(idx)
+        let (_error_out_storage, error_out_ptr) = allocate_error_output
+
+        write_usize(error_out_ptr, 0)
+
+        let result = tantivy_index_close(idx, error_out_ptr)
 
         @index = Option.None
 
