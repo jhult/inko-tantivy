@@ -6,133 +6,154 @@
 # License, v. 2.0. If a copy of the MPL was not distributed
 # with this file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-import tantivy.marshal (c_pointer_to_string_checked)
 import std.test (Tests)
+import tantivy.marshal (c_pointer_to_string_checked)
 
 fn pub tests(t: mut Tests) {
-  t.test('c_pointer_to_string_checked: null pointer returns empty string and not truncated', fn (t) {
-    let null_ptr: Pointer[UInt8] = (0 as Int) as Pointer[UInt8]
-    let (result, truncated) = c_pointer_to_string_checked(null_ptr, 100)
+  t.test(
+    'c_pointer_to_string_checked: null pointer returns empty string and not truncated',
+    fn (t) {
+      let null_ptr: Pointer[UInt8] = (0 as Int) as Pointer[UInt8]
+      let (result, truncated) = c_pointer_to_string_checked(null_ptr, 100)
 
-    t.equal(result, '')
-    t.false(truncated)
-  })
+      t.equal(result, '')
+      t.false(truncated)
+    },
+  )
 
-  t.test('c_pointer_to_string_checked: empty string (null terminator at start)', fn (t) {
-    let buffer = ByteArray.filled(with: 0, times: 10)
-    let ptr = buffer.pointer
+  t.test(
+    'c_pointer_to_string_checked: empty string (null terminator at start)',
+    fn (t) {
+      let buffer = ByteArray.filled(with: 0, times: 10)
+      let ptr = buffer.pointer
 
-    let (result, truncated) = c_pointer_to_string_checked(ptr, 100)
+      let (result, truncated) = c_pointer_to_string_checked(ptr, 100)
 
-    t.equal(result, '')
-    t.false(truncated)
-  })
+      t.equal(result, '')
+      t.false(truncated)
+    },
+  )
 
-  t.test('c_pointer_to_string_checked: normal string with null terminator', fn (t) {
-    let buffer = ByteArray.filled(with: 0, times: 10)
-    let ptr = buffer.pointer
+  t.test(
+    'c_pointer_to_string_checked: normal string with null terminator',
+    fn (t) {
+      let buffer = ByteArray.filled(with: 0, times: 10)
+      let ptr = buffer.pointer
 
-    # Write "hello\0"
-    let _ = buffer.set(0, 104) # 'h'
-    let _ = buffer.set(1, 101) # 'e'
-    let _ = buffer.set(2, 108) # 'l'
-    let _ = buffer.set(3, 108) # 'l'
-    let _ = buffer.set(4, 111) # 'o'
-    # buffer[5] is already 0 (null terminator)
+      # Write "hello\0"
+      let _ = buffer.set(0, 104) # 'h'
+      let _ = buffer.set(1, 101) # 'e'
+      let _ = buffer.set(2, 108) # 'l'
+      let _ = buffer.set(3, 108) # 'l'
+      let _ = buffer.set(4, 111) # 'o'
+      # buffer[5] is already 0 (null terminator)
 
-    let (result, truncated) = c_pointer_to_string_checked(ptr, 100)
+      let (result, truncated) = c_pointer_to_string_checked(ptr, 100)
 
-    t.equal(result, 'hello')
-    t.false(truncated)
-  })
+      t.equal(result, 'hello')
+      t.false(truncated)
+    },
+  )
 
-  t.test('c_pointer_to_string_checked: string exactly at max_len-1 (not truncated)', fn (t) {
-    let buffer = ByteArray.filled(with: 0, times: 10)
-    let ptr = buffer.pointer
+  t.test(
+    'c_pointer_to_string_checked: string exactly at max_len-1 (not truncated)',
+    fn (t) {
+      let buffer = ByteArray.filled(with: 0, times: 10)
+      let ptr = buffer.pointer
 
-    # Write "12345\0" (5 chars + null = 6 bytes, less than max_len=10)
-    let _ = buffer.set(0, 49) # '1'
-    let _ = buffer.set(1, 50) # '2'
-    let _ = buffer.set(2, 51) # '3'
-    let _ = buffer.set(3, 52) # '4'
-    let _ = buffer.set(4, 53) # '5'
-    # buffer[5] is already 0 (null terminator)
+      # Write "12345\0" (5 chars + null = 6 bytes, less than max_len=10)
+      let _ = buffer.set(0, 49) # '1'
+      let _ = buffer.set(1, 50) # '2'
+      let _ = buffer.set(2, 51) # '3'
+      let _ = buffer.set(3, 52) # '4'
+      let _ = buffer.set(4, 53) # '5'
+      # buffer[5] is already 0 (null terminator)
 
-    let (result, truncated) = c_pointer_to_string_checked(ptr, 10)
+      let (result, truncated) = c_pointer_to_string_checked(ptr, 10)
 
-    t.equal(result, '12345')
-    t.false(truncated)
-  })
+      t.equal(result, '12345')
+      t.false(truncated)
+    },
+  )
 
-  t.test('c_pointer_to_string_checked: string exactly at max_len (truncated)', fn (t) {
-    let buffer = ByteArray.filled(with: 0, times: 10)
-    let ptr = buffer.pointer
+  t.test(
+    'c_pointer_to_string_checked: string exactly at max_len (truncated)',
+    fn (t) {
+      let buffer = ByteArray.filled(with: 0, times: 10)
+      let ptr = buffer.pointer
 
-    # Write "123456789" (9 chars, no null terminator, exactly max_len)
-    let _ = buffer.set(0, 49) # '1'
-    let _ = buffer.set(1, 50) # '2'
-    let _ = buffer.set(2, 51) # '3'
-    let _ = buffer.set(3, 52) # '4'
-    let _ = buffer.set(4, 53) # '5'
-    let _ = buffer.set(5, 54) # '6'
-    let _ = buffer.set(6, 55) # '7'
-    let _ = buffer.set(7, 56) # '8'
-    let _ = buffer.set(8, 57) # '9'
-    # buffer[9] is 0, but we'll read max_len=9 bytes first
+      # Write "123456789" (9 chars, no null terminator, exactly max_len)
+      let _ = buffer.set(0, 49) # '1'
+      let _ = buffer.set(1, 50) # '2'
+      let _ = buffer.set(2, 51) # '3'
+      let _ = buffer.set(3, 52) # '4'
+      let _ = buffer.set(4, 53) # '5'
+      let _ = buffer.set(5, 54) # '6'
+      let _ = buffer.set(6, 55) # '7'
+      let _ = buffer.set(7, 56) # '8'
+      let _ = buffer.set(8, 57) # '9'
+      # buffer[9] is 0, but we'll read max_len=9 bytes first
 
-    let (result, truncated) = c_pointer_to_string_checked(ptr, 9)
+      let (result, truncated) = c_pointer_to_string_checked(ptr, 9)
 
-    # Should read 9 bytes (123456789) and be marked as truncated
-    t.equal(result, '123456789')
-    t.true(truncated)
-  })
+      # Should read 9 bytes (123456789) and be marked as truncated
+      t.equal(result, '123456789')
+      t.true(truncated)
+    },
+  )
 
-  t.test('c_pointer_to_string_checked: string longer than max_len (truncated)', fn (t) {
-    let buffer = ByteArray.filled(with: 0, times: 20)
-    let ptr = buffer.pointer
+  t.test(
+    'c_pointer_to_string_checked: string longer than max_len (truncated)',
+    fn (t) {
+      let buffer = ByteArray.filled(with: 0, times: 20)
+      let ptr = buffer.pointer
 
-    # Write "123456789012345" (15 chars, no null terminator)
-    let _ = buffer.set(0, 49) # '1'
-    let _ = buffer.set(1, 50) # '2'
-    let _ = buffer.set(2, 51) # '3'
-    let _ = buffer.set(3, 52) # '4'
-    let _ = buffer.set(4, 53) # '5'
-    let _ = buffer.set(5, 54) # '6'
-    let _ = buffer.set(6, 55) # '7'
-    let _ = buffer.set(7, 56) # '8'
-    let _ = buffer.set(8, 57) # '9'
-    let _ = buffer.set(9, 48) # '0'
-    let _ = buffer.set(10, 49) # '1'
-    let _ = buffer.set(11, 50) # '2'
-    let _ = buffer.set(12, 51) # '3'
-    let _ = buffer.set(13, 52) # '4'
-    let _ = buffer.set(14, 53) # '5'
-    # buffer[15] is 0, but we'll read max_len=10 bytes first
+      # Write "123456789012345" (15 chars, no null terminator)
+      let _ = buffer.set(0, 49) # '1'
+      let _ = buffer.set(1, 50) # '2'
+      let _ = buffer.set(2, 51) # '3'
+      let _ = buffer.set(3, 52) # '4'
+      let _ = buffer.set(4, 53) # '5'
+      let _ = buffer.set(5, 54) # '6'
+      let _ = buffer.set(6, 55) # '7'
+      let _ = buffer.set(7, 56) # '8'
+      let _ = buffer.set(8, 57) # '9'
+      let _ = buffer.set(9, 48) # '0'
+      let _ = buffer.set(10, 49) # '1'
+      let _ = buffer.set(11, 50) # '2'
+      let _ = buffer.set(12, 51) # '3'
+      let _ = buffer.set(13, 52) # '4'
+      let _ = buffer.set(14, 53) # '5'
+      # buffer[15] is 0, but we'll read max_len=10 bytes first
 
-    let (result, truncated) = c_pointer_to_string_checked(ptr, 10)
+      let (result, truncated) = c_pointer_to_string_checked(ptr, 10)
 
-    # Should read 10 bytes (1234567890) and be marked as truncated
-    t.equal(result, '1234567890')
-    t.true(truncated)
-  })
+      # Should read 10 bytes (1234567890) and be marked as truncated
+      t.equal(result, '1234567890')
+      t.true(truncated)
+    },
+  )
 
-  t.test('c_pointer_to_string_checked: string at max_len-1 with null terminator', fn (t) {
-    let buffer = ByteArray.filled(with: 0, times: 10)
-    let ptr = buffer.pointer
+  t.test(
+    'c_pointer_to_string_checked: string at max_len-1 with null terminator',
+    fn (t) {
+      let buffer = ByteArray.filled(with: 0, times: 10)
+      let ptr = buffer.pointer
 
-    # Write "12345\0" (5 chars + null = 6 bytes, max_len=10)
-    let _ = buffer.set(0, 49) # '1'
-    let _ = buffer.set(1, 50) # '2'
-    let _ = buffer.set(2, 51) # '3'
-    let _ = buffer.set(3, 52) # '4'
-    let _ = buffer.set(4, 53) # '5'
-    # buffer[5] is already 0 (null terminator)
+      # Write "12345\0" (5 chars + null = 6 bytes, max_len=10)
+      let _ = buffer.set(0, 49) # '1'
+      let _ = buffer.set(1, 50) # '2'
+      let _ = buffer.set(2, 51) # '3'
+      let _ = buffer.set(3, 52) # '4'
+      let _ = buffer.set(4, 53) # '5'
+      # buffer[5] is already 0 (null terminator)
 
-    let (result, truncated) = c_pointer_to_string_checked(ptr, 10)
+      let (result, truncated) = c_pointer_to_string_checked(ptr, 10)
 
-    t.equal(result, '12345')
-    t.false(truncated)
-  })
+      t.equal(result, '12345')
+      t.false(truncated)
+    },
+  )
 
   t.test('c_pointer_to_string_checked: single character string', fn (t) {
     let buffer = ByteArray.filled(with: 0, times: 10)
@@ -148,23 +169,26 @@ fn pub tests(t: mut Tests) {
     t.false(truncated)
   })
 
-  t.test('c_pointer_to_string_checked: null in middle of string (stops at null)', fn (t) {
-    let buffer = ByteArray.filled(with: 0, times: 10)
-    let ptr = buffer.pointer
+  t.test(
+    'c_pointer_to_string_checked: null in middle of string (stops at null)',
+    fn (t) {
+      let buffer = ByteArray.filled(with: 0, times: 10)
+      let ptr = buffer.pointer
 
-    # Write "hel\0lo" (should stop at null)
-    let _ = buffer.set(0, 104) # 'h'
-    let _ = buffer.set(1, 101) # 'e'
-    let _ = buffer.set(2, 108) # 'l'
-    # buffer[3] is already 0 (null terminator)
-    let _ = buffer.set(4, 108) # 'l'
-    let _ = buffer.set(5, 111) # 'o'
+      # Write "hel\0lo" (should stop at null)
+      let _ = buffer.set(0, 104) # 'h'
+      let _ = buffer.set(1, 101) # 'e'
+      let _ = buffer.set(2, 108) # 'l'
+      # buffer[3] is already 0 (null terminator)
+      let _ = buffer.set(4, 108) # 'l'
+      let _ = buffer.set(5, 111) # 'o'
 
-    let (result, truncated) = c_pointer_to_string_checked(ptr, 10)
+      let (result, truncated) = c_pointer_to_string_checked(ptr, 10)
 
-    t.equal(result, 'hel')
-    t.false(truncated)
-  })
+      t.equal(result, 'hel')
+      t.false(truncated)
+    },
+  )
 
   t.test('c_pointer_to_string_checked: max_len=1 with empty string', fn (t) {
     let buffer = ByteArray.filled(with: 0, times: 5)
@@ -176,33 +200,39 @@ fn pub tests(t: mut Tests) {
     t.false(truncated)
   })
 
-  t.test('c_pointer_to_string_checked: max_len=1 with single char no null', fn (t) {
-    let buffer = ByteArray.filled(with: 0, times: 5)
-    let ptr = buffer.pointer
+  t.test(
+    'c_pointer_to_string_checked: max_len=1 with single char no null',
+    fn (t) {
+      let buffer = ByteArray.filled(with: 0, times: 5)
+      let ptr = buffer.pointer
 
-    # Write "A" without null terminator
-    let _ = buffer.set(0, 65) # 'A'
-    # buffer[1] is 0
+      # Write "A" without null terminator
+      let _ = buffer.set(0, 65) # 'A'
+      # buffer[1] is 0
 
-    let (result, truncated) = c_pointer_to_string_checked(ptr, 1)
+      let (result, truncated) = c_pointer_to_string_checked(ptr, 1)
 
-    # Should read 1 byte (A) and be marked as truncated (no null found)
-    t.equal(result, 'A')
-    t.true(truncated)
-  })
+      # Should read 1 byte (A) and be marked as truncated (no null found)
+      t.equal(result, 'A')
+      t.true(truncated)
+    },
+  )
 
-  t.test('c_pointer_to_string_checked: max_len=1 with single char and null', fn (t) {
-    let buffer = ByteArray.filled(with: 0, times: 5)
-    let ptr = buffer.pointer
+  t.test(
+    'c_pointer_to_string_checked: max_len=1 with single char and null',
+    fn (t) {
+      let buffer = ByteArray.filled(with: 0, times: 5)
+      let ptr = buffer.pointer
 
-    # Write "A" with null terminator at position 1
-    let _ = buffer.set(0, 65) # 'A'
-    # buffer[1] is already 0 (null terminator)
+      # Write "A" with null terminator at position 1
+      let _ = buffer.set(0, 65) # 'A'
+      # buffer[1] is already 0 (null terminator)
 
-    let (result, truncated) = c_pointer_to_string_checked(ptr, 1)
+      let (result, truncated) = c_pointer_to_string_checked(ptr, 1)
 
-    # Should read 1 byte (A) and NOT be truncated (found null at position 1, but that's after the char)
-    t.equal(result, 'A')
-    t.false(truncated)
-  })
+      # Should read 1 byte (A) and NOT be truncated (found null at position 1, but that's after the char)
+      t.equal(result, 'A')
+      t.false(truncated)
+    },
+  )
 }

@@ -5,9 +5,9 @@
 # Integration tests for edge cases
 # These tests verify the system handles edge cases and boundary conditions gracefully.
 
+import helpers (cleanup_test_index, temp_index_path)
 import std.test (Tests)
 import tantivy.index_manager (TantivyConfig, TantivyIndexManager)
-import helpers (cleanup_test_index, temp_index_path)
 
 fn pub tests(t: mut Tests) {
   # Test edge case: empty doc_id

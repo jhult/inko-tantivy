@@ -25,8 +25,7 @@ fn pub get_string_buffer(size: Int) -> ByteArray {
 }
 
 # Return string buffer (no-op for simple allocation)
-fn pub return_string_buffer(buffer: ByteArray) {
-}
+fn pub return_string_buffer(buffer: ByteArray) {}
 
 # Get pool statistics (always returns zeros for simple allocation)
 fn pub get_pool_stats -> (Int, Int, Int, Int) {

@@ -95,6 +95,7 @@ impl RateLimiter {
     refill_automatically
 
     let requested = count as Float
+
     if @tokens >= requested {
       @tokens = @tokens - requested
       true

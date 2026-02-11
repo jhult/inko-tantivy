@@ -1,49 +1,6 @@
-# This Source Code Form is subject to the terms of the Mozilla Public
+# This Source Code Form is subject to terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
-#
-# Tantivy FFI bindings for full-text email search
-#
-# This module provides FFI bindings to Tantivy, a Rust-based search library.
-# Tantivy offers:
-# - Full-text search with relevance scoring
-# - Fast indexing and querying
-# - Field-level indexing (string, integer, boolean, etc.)
-# - Faceted search and aggregation
-# - Distributed search capabilities
-#
-# Performance Notes:
-# - Current limits are reasonable for typical workloads (default: 1000 results, max: 10000)
-# - Batch aggregation reads all results into memory (streaming could be added if benchmarks show need)
-# - string_to_c_buffer creates temporary allocations for each FFI call
-# - Optimization opportunities exist but should only be pursued if benchmarks show >10% impact
-#   - Buffer pooling for string_to_c_buffer
-#   - Streaming iterators for large result sets
-#   - Builder pattern for batch operations
-#
-# Architecture:
-# This module is organized into sub-modules for better maintainability:
-# - tantivy/ffi.inko: FFI binding definitions and C struct layout constants
-# - tantivy/marshal.inko: Memory marshaling utilities for FFI operations
-# - tantivy/query_builder.inko: Query builder for constructing search queries
-# - tantivy/index_manager.inko: Main index management business logic
-#
-# For backward compatibility, all public symbols are re-exported from this module.
-# You can import from either `tantivy` (for backward compatibility) or from the
-# specific sub-modules (e.g., `tantivy.ffi`, `tantivy.index_manager`).
 
-# Import all public symbols from sub-modules
-import tantivy.ffi (
-  AGGREGATION_OFFSET_COUNT, AGGREGATION_OFFSET_KEY, AGGREGATION_SIZE,
-  CONFIG_OFFSET_PATH, CONFIG_OFFSET_READER_MEMORY, CONFIG_OFFSET_SCHEMA_JSON,
-  CONFIG_OFFSET_THREADS, CONFIG_OFFSET_WRITER_MEMORY, CONFIG_SIZE,
-  FIELD_OFFSET_KEY, FIELD_OFFSET_VALUE, FIELD_SIZE, PTR_SIZE,
-  RESULT_OFFSET_DOC_ID, RESULT_OFFSET_HIGHLIGHT, RESULT_OFFSET_SCORE,
-  RESULT_SIZE, SUGGESTION_OFFSET_SCORE, SUGGESTION_OFFSET_TEXT, SUGGESTION_SIZE,
-)
-import tantivy.index_manager (
-  TantivyAggregationResult, TantivyConfig, TantivyIndexManager, TantivyResult,
-  TantivySuggestion,
-)
-import tantivy.marshal (c_pointer_to_string_checked)
+import tantivy.index_manager (TantivyConfig, TantivyIndexManager)
 import tantivy.query_builder (TantivyQueryBuilder)

@@ -6,7 +6,6 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-
 # Maximum document ID length to prevent excessive memory usage
 let pub MAX_DOC_ID_LENGTH = 1024
 
@@ -26,12 +25,10 @@ fn pub is_valid_identifier(s: String) -> Bool {
 
 # Validate document ID
 fn pub validate_doc_id(doc_id: String) -> Result[String, String] {
-  if doc_id.size == 0 {
-    return Result.Error("Document ID cannot be empty")
-  }
+  if doc_id.size == 0 { return Result.Error('Document ID cannot be empty') }
 
   if doc_id.size > MAX_DOC_ID_LENGTH {
-    return Result.Error("Document ID exceeds maximum length")
+    return Result.Error('Document ID exceeds maximum length')
   }
 
   Result.Ok(doc_id)
@@ -39,12 +36,10 @@ fn pub validate_doc_id(doc_id: String) -> Result[String, String] {
 
 # Validate field name
 fn pub validate_field_name(name: String) -> Result[String, String] {
-  if name.size == 0 {
-    return Result.Error("Field name cannot be empty")
-  }
+  if name.size == 0 { return Result.Error('Field name cannot be empty') }
 
   if name.size > MAX_FIELD_NAME_LENGTH {
-    return Result.Error("Field name exceeds maximum length")
+    return Result.Error('Field name exceeds maximum length')
   }
 
   Result.Ok(name)
@@ -53,7 +48,7 @@ fn pub validate_field_name(name: String) -> Result[String, String] {
 # Validate field value
 fn pub validate_field_value(value: String) -> Result[String, String] {
   if value.size > MAX_FIELD_VALUE_LENGTH {
-    return Result.Error("Field value exceeds maximum length")
+    return Result.Error('Field value exceeds maximum length')
   }
 
   Result.Ok(value)
@@ -61,12 +56,10 @@ fn pub validate_field_value(value: String) -> Result[String, String] {
 
 # Validate query string
 fn pub validate_query(query: String) -> Result[String, String] {
-  if query.size == 0 {
-    return Result.Error("Query string cannot be empty")
-  }
+  if query.size == 0 { return Result.Error('Query string cannot be empty') }
 
   if query.size > MAX_QUERY_LENGTH {
-    return Result.Error("Query string exceeds maximum length")
+    return Result.Error('Query string exceeds maximum length')
   }
 
   Result.Ok(query)
@@ -74,25 +67,19 @@ fn pub validate_query(query: String) -> Result[String, String] {
 
 # Validate limit parameter
 fn pub validate_limit(limit: Int, operation: String) -> Result[Int, String] {
-  if limit < 0 {
-    return Result.Error("Limit must be non-negative")
-  }
+  if limit < 0 { return Result.Error('Limit must be non-negative') }
 
-  if limit > 10_000 {
-    return Result.Error("Limit exceeds maximum value")
-  }
+  if limit > 10_000 { return Result.Error('Limit exceeds maximum value') }
 
   Result.Ok(limit)
 }
 
 # Validate offset parameter
 fn pub validate_offset(offset: Int) -> Result[Int, String] {
-  if offset < 0 {
-    return Result.Error("Offset must be non-negative")
-  }
+  if offset < 0 { return Result.Error('Offset must be non-negative') }
 
   if offset > 1_000_000_000 {
-    return Result.Error("Offset exceeds maximum value")
+    return Result.Error('Offset exceeds maximum value')
   }
 
   Result.Ok(offset)
@@ -100,13 +87,9 @@ fn pub validate_offset(offset: Int) -> Result[Int, String] {
 
 # Validate distance parameter
 fn pub validate_distance(distance: Int) -> Result[Int, String] {
-  if distance < 0 {
-    return Result.Error("Distance must be non-negative")
-  }
+  if distance < 0 { return Result.Error('Distance must be non-negative') }
 
-  if distance > 100 {
-    return Result.Error("Distance exceeds maximum value")
-  }
+  if distance > 100 { return Result.Error('Distance exceeds maximum value') }
 
   Result.Ok(distance)
 }

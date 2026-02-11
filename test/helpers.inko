@@ -10,15 +10,15 @@ import tantivy.index_manager (TantivyIndexManager)
 
 # Get platform-appropriate temp directory
 fn pub get_temp_dir -> String {
-  match env.get("TMPDIR") {
+  match env.get('TMPDIR') {
     case Ok(path) -> trim_trailing_slash(path.trim)
     case Error(_) -> {
-      match env.get("TEMP") {
+      match env.get('TEMP') {
         case Ok(path) -> trim_trailing_slash(path.trim)
         case Error(_) -> {
-          match env.get("TMP") {
+          match env.get('TMP') {
             case Ok(path) -> trim_trailing_slash(path.trim)
-            case Error(_) -> "/tmp"
+            case Error(_) -> '/tmp'
           }
         }
       }
@@ -31,9 +31,7 @@ fn pub trim_trailing_slash(path: String) -> String {
   if path.size > 0 {
     match path.get(path.size - 1) {
       case Ok(byte) -> {
-        if byte.to_int == 47 {
-          return path.substring(0, path.size - 1)
-        }
+        if byte.to_int == 47 { return path.substring(0, path.size - 1) }
       }
       case Error(_) -> {}
     }
@@ -45,7 +43,7 @@ fn pub trim_trailing_slash(path: String) -> String {
 # Helper to create a temporary test index directory
 # Takes a unique identifier (e.g., test name or number) to avoid conflicts
 fn pub temp_index_path(unique_id: String) -> String {
-  "${get_temp_dir}/tantivy-test-${unique_id}"
+  '${get_temp_dir}/tantivy-test-${unique_id}'
 }
 
 # Check if FFI backend is available and working

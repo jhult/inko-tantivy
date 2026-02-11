@@ -7,10 +7,7 @@
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 import std.test (Tests)
-import tantivy.index_manager (
-  TantivyConfig, TantivyIndexManager,
-)
-import tantivy.query_builder (TantivyQueryBuilder)
+import tantivy.index_manager (TantivyConfig, TantivyIndexManager)
 
 fn pub tests(t: mut Tests) {
   t.test('Repeated search operations complete successfully', fn (t) {
@@ -21,7 +18,7 @@ fn pub tests(t: mut Tests) {
           t.true(false)
           return
         }
-      }
+      },
     )
 
     match manager.open {
@@ -36,6 +33,7 @@ fn pub tests(t: mut Tests) {
           ]
 
           let _ = manager.add_doc('leak-test-${i}', fields)
+
           i = i + 1
         }
 
@@ -45,6 +43,7 @@ fn pub tests(t: mut Tests) {
 
         while i < 500 {
           let _ = manager.search('test', 10, 0)
+
           i = i + 1
         }
 
@@ -62,7 +61,7 @@ fn pub tests(t: mut Tests) {
           t.true(false)
           return
         }
-      }
+      },
     )
 
     match manager.open {
@@ -77,6 +76,7 @@ fn pub tests(t: mut Tests) {
           ]
 
           let _ = manager.add_doc('auto-test-${i}', fields)
+
           i = i + 1
         }
 
@@ -86,6 +86,7 @@ fn pub tests(t: mut Tests) {
 
         while i < 300 {
           let _ = manager.autocomplete('subject', 'aut', 10)
+
           i = i + 1
         }
 
@@ -103,7 +104,7 @@ fn pub tests(t: mut Tests) {
           t.true(false)
           return
         }
-      }
+      },
     )
 
     match manager.open {
@@ -139,7 +140,7 @@ fn pub tests(t: mut Tests) {
           t.true(false)
           return
         }
-      }
+      },
     )
 
     match manager.open {
@@ -154,6 +155,7 @@ fn pub tests(t: mut Tests) {
           ]
 
           let _ = manager.add_doc('add-test-${i}', fields)
+
           i = i + 1
         }
 

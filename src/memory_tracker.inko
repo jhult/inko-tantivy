@@ -76,12 +76,11 @@ impl MemoryTracker {
         }
         case Error(_) -> {}
       }
+
       i = i + 1
     }
 
-    if !found {
-      @allocations_by_type.push((allocation_type, 1))
-    }
+    if !found { @allocations_by_type.push((allocation_type, 1)) }
 
     found = false
     i = 0
@@ -96,12 +95,11 @@ impl MemoryTracker {
         }
         case Error(_) -> {}
       }
+
       i = i + 1
     }
 
-    if !found {
-      @bytes_by_type.push((allocation_type, bytes))
-    }
+    if !found { @bytes_by_type.push((allocation_type, bytes)) }
   }
 
   fn pub allocations -> Int {
@@ -121,21 +119,15 @@ impl MemoryTracker {
   }
 
   fn pub format_bytes(bytes: Int) -> String {
-    if bytes < 1024 {
-      return '${bytes}B'
-    }
+    if bytes < 1024 { return '${bytes}B' }
 
     let kb = bytes / 1024
 
-    if kb < 1024 {
-      return '${kb}KB'
-    }
+    if kb < 1024 { return '${kb}KB' }
 
     let mb = kb / 1024
 
-    if mb < 1024 {
-      return '${mb}MB'
-    }
+    if mb < 1024 { return '${mb}MB' }
 
     let gb = mb / 1024
 
@@ -143,16 +135,16 @@ impl MemoryTracker {
   }
 
   fn pub print_summary {
-    Stdout.new.print('')
-    Stdout.new.print('=== ${@name} Memory Allocation ===')
-    Stdout.new.print("  Total allocations: ${@allocations}")
-    Stdout.new.print(
-      "  Total bytes allocated: ${format_bytes(@bytes_allocated)}",
+    let _ = Stdout.new.print('')
+    let _ = Stdout.new.print('=== ${@name} Memory Allocation ===')
+    let _ = Stdout.new.print('  Total allocations: ${@allocations}')
+    let _ = Stdout.new.print(
+      '  Total bytes allocated: ${format_bytes(@bytes_allocated)}',
     )
-    Stdout.new.print('')
+    let _ = Stdout.new.print('')
 
     if @allocations > 0 {
-      Stdout.new.print('Allocations by type:')
+      let _ = Stdout.new.print('Allocations by type:')
 
       let mut sorted = @allocations_by_type.clone
       let mut i = 0
@@ -163,14 +155,15 @@ impl MemoryTracker {
 
         while j < sorted.size {
           match sorted.get(j) {
-            case Ok((_, count_j)) -> match sorted.get(max_j) {
-              case Ok((_, count_max)) -> {
-                if count_j > count_max { max_j = j }
+            case Ok((_, count_j)) -> {
+              match sorted.get(max_j) {
+                case Ok((_, count_max)) -> if count_j > count_max { max_j = j }
+                case Error(_) -> {}
               }
-              case Error(_) -> {}
             }
             case Error(_) -> {}
           }
+
           j = j + 1
         }
 
@@ -178,6 +171,7 @@ impl MemoryTracker {
         let temp_val = sorted.get(max_j).or_panic
         let temp_clone = (temp.0.clone, temp.1)
         let temp_val_clone = (temp_val.0.clone, temp_val.1)
+
         sorted.set(i, temp_val_clone)
         sorted.set(max_j, temp_clone)
 
@@ -186,11 +180,13 @@ impl MemoryTracker {
 
       for (ty, count) in sorted.iter {
         let percentage = (count * 100) / @allocations
-        Stdout.new.print("    ${ty}: ${count} (${percentage}%)")
-      }
-      Stdout.new.print('')
 
-      Stdout.new.print('Bytes allocated by type:')
+        let _ = Stdout.new.print('    ${ty}: ${count} (${percentage}%)')
+      }
+
+      let _ = Stdout.new.print('')
+
+      let _ = Stdout.new.print('Bytes allocated by type:')
 
       sorted = @bytes_by_type.clone
       i = 0
@@ -201,14 +197,15 @@ impl MemoryTracker {
 
         while j < sorted.size {
           match sorted.get(j) {
-            case Ok((_, bytes_j)) -> match sorted.get(max_j) {
-              case Ok((_, bytes_max)) -> {
-                if bytes_j > bytes_max { max_j = j }
+            case Ok((_, bytes_j)) -> {
+              match sorted.get(max_j) {
+                case Ok((_, bytes_max)) -> if bytes_j > bytes_max { max_j = j }
+                case Error(_) -> {}
               }
-              case Error(_) -> {}
             }
             case Error(_) -> {}
           }
+
           j = j + 1
         }
 
@@ -216,6 +213,7 @@ impl MemoryTracker {
         let temp_val = sorted.get(max_j).or_panic
         let temp_clone = (temp.0.clone, temp.1)
         let temp_val_clone = (temp_val.0.clone, temp_val.1)
+
         sorted.set(i, temp_val_clone)
         sorted.set(max_j, temp_clone)
 
@@ -224,21 +222,22 @@ impl MemoryTracker {
 
       for (ty, bytes_val) in sorted.iter {
         let percentage = (bytes_val * 100) / @bytes_allocated
-        Stdout.new.print(
-          "    ${ty}: ${format_bytes(bytes_val)} (${percentage}%)",
+
+        let _ = Stdout.new.print(
+          '    ${ty}: ${format_bytes(bytes_val)} (${percentage}%)',
         )
       }
-      Stdout.new.print('')
+
+      let _ = Stdout.new.print('')
     }
 
     if @allocations > 0 {
       let avg_bytes = @bytes_allocated / @allocations
-      Stdout.new.print(
-        "  Average allocation size: ${format_bytes(avg_bytes)}",
-      )
+
+      let _ = Stdout.new.print('  Average allocation size: ${format_bytes(avg_bytes)}')
     }
 
-    Stdout.new.print('')
+    let _ = Stdout.new.print('')
   }
 
   fn pub allocation_rate(duration_ns: Int) -> Float {
@@ -249,11 +248,9 @@ impl MemoryTracker {
 
   fn pub print_rate(duration_ns: Int) {
     if duration_ns > 0 {
-      Stdout.new.print(
-        "  Allocation rate: ${allocation_rate(duration_ns).to_int} allocations/sec",
+      let _ = Stdout.new.print(
+        '  Allocation rate: ${allocation_rate(duration_ns).to_int} allocations/sec',
       )
     }
   }
 }
-
-

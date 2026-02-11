@@ -3,7 +3,8 @@
 # with this file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 import pointer_helpers (
-  is_aligned_to, is_null, pointer_offset, pointer_to_int, read_usize, write_usize,
+  is_aligned_to, is_null, pointer_offset, pointer_to_int, read_usize,
+  write_usize,
 )
 import std.test (Tests)
 
@@ -35,6 +36,7 @@ fn pub tests(t: mut Tests) {
     let ptr = buffer.pointer
 
     let max_int = 9223372036854775807
+
     write_usize(ptr, max_int)
 
     let result = read_usize(ptr)
@@ -154,23 +156,15 @@ fn pub tests(t: mut Tests) {
     let ptr = buffer.pointer
 
     let values = [
-      0,
-      1,
-      255,
-      256,
-      65535,
-      65536,
-      1311768467463790320,
-      -2,
-      -1,
-      -1,
-      -256,
+      0, 1, 255, 256, 65535, 65536, 1311768467463790320, -2, -1, -1, -256,
       -9223372036854775808,
     ]
 
     for v in values {
       write_usize(ptr, v)
+
       let result = read_usize(ptr)
+
       t.equal(result, v)
     }
   })
@@ -178,15 +172,11 @@ fn pub tests(t: mut Tests) {
   t.test('property test: byte boundaries', fn (t) {
     let buffer = ByteArray.filled(with: 0, times: 32)
 
-    let values = [
-      (0, 1),
-      (8, 256),
-      (16, 65536),
-      (24, 16777216),
-    ]
+    let values = [(0, 1), (8, 256), (16, 65536), (24, 16777216)]
 
     for (offset, expected) in values {
       let ptr = pointer_offset(buffer.pointer, offset)
+
       write_usize(ptr, expected)
       t.equal(read_usize(ptr), expected)
     }
@@ -226,6 +216,7 @@ fn pub tests(t: mut Tests) {
 
     # Read back should give same value if little-endian is used correctly
     let result = read_usize(ptr)
+
     t.equal(result, 72623859790382856)
   })
 }

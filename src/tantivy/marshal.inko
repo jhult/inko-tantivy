@@ -9,11 +9,11 @@
 
 import buffer_pool (get_string_buffer, return_string_buffer)
 import pointer_helpers (pointer_offset, pointer_to_int, read_usize, write_usize)
+import std.bytes (ByteArray)
+import std.string (StringBuffer)
 import tantivy.ffi (
   FIELD_OFFSET_VALUE, FIELD_SIZE, TANTIVY_ERROR_BUFFER_SIZE, tantivy_error_free,
 )
-import std.bytes (ByteArray)
-import std.string (StringBuffer)
 
 # Helper: Join array of strings with separator
 fn pub join_strings(strings: ref Array[String], sep: String) -> String {

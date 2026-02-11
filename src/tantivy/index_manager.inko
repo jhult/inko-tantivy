@@ -8,33 +8,38 @@
 # including opening/closing indexes, adding/deleting documents, searching, and
 # performing aggregations.
 
-import input_validation (validate_distance, validate_field_name, validate_limit, validate_offset, validate_query)
-import pointer_helpers (is_null, pointer_offset, pointer_to_int, read_usize, write_usize)
-import tantivy.ffi (
-  AGGREGATION_OFFSET_COUNT, AGGREGATION_OFFSET_KEY, AGGREGATION_SIZE,
-  CONFIG_OFFSET_READER_MEMORY, CONFIG_OFFSET_SCHEMA_JSON,
-  CONFIG_OFFSET_THREADS, CONFIG_OFFSET_WRITER_MEMORY, CONFIG_SIZE,
-  DEFAULT_JSON_BUFFER_SIZE, DEFAULT_STRING_FIELD_BUFFER_SIZE, FIELD_SIZE, PTR_SIZE,
-  RESULT_OFFSET_DOC_ID, RESULT_OFFSET_HIGHLIGHT, RESULT_OFFSET_SCORE,
-  RESULT_SIZE, SUGGESTION_OFFSET_SCORE, SUGGESTION_OFFSET_TEXT, SUGGESTION_SIZE,
-  tantivy_aggregation_results_free, tantivy_aggregate_terms,
-  tantivy_autocomplete, tantivy_did_you_mean, tantivy_docs_array_free,
-  tantivy_index_add_doc, tantivy_index_add_docs_batch,
-  tantivy_index_close, tantivy_index_commit, tantivy_index_delete_doc,
-  tantivy_index_delete_docs, tantivy_index_get_doc, tantivy_index_get_docs,
-  tantivy_index_open, tantivy_index_rollback, tantivy_index_search, tantivy_ping,
-  tantivy_result_free, tantivy_string_free, tantivy_suggestions_free,
+import input_validation (
+  validate_distance, validate_field_name, validate_limit, validate_offset,
+  validate_query,
 )
-import tantivy.marshal (
-  allocate_error_output, c_array_element_ptr, c_pointer_to_string,
-  c_pointer_to_string_checked, check_ffi_error, create_field_array,
-  read_optional_string_field, read_string_field, release_string_buffer,
-  string_array_to_c_pointers, string_to_c_buffer,
+import pointer_helpers (
+  is_null, pointer_offset, pointer_to_int, read_usize, write_usize,
 )
 import std.bytes (ByteArray)
 import std.drop (Drop)
 import std.fs.path (Path)
 import std.stdio (Stderr)
+import tantivy.ffi (
+  AGGREGATION_OFFSET_COUNT, AGGREGATION_OFFSET_KEY, AGGREGATION_SIZE,
+  CONFIG_OFFSET_READER_MEMORY, CONFIG_OFFSET_SCHEMA_JSON, CONFIG_OFFSET_THREADS,
+  CONFIG_OFFSET_WRITER_MEMORY, CONFIG_SIZE, DEFAULT_JSON_BUFFER_SIZE,
+  DEFAULT_STRING_FIELD_BUFFER_SIZE, FIELD_SIZE, PTR_SIZE, RESULT_OFFSET_DOC_ID,
+  RESULT_OFFSET_HIGHLIGHT, RESULT_OFFSET_SCORE, RESULT_SIZE,
+  SUGGESTION_OFFSET_SCORE, SUGGESTION_OFFSET_TEXT, SUGGESTION_SIZE,
+  tantivy_aggregate_terms, tantivy_aggregation_results_free,
+  tantivy_autocomplete, tantivy_did_you_mean, tantivy_docs_array_free,
+  tantivy_index_add_doc, tantivy_index_add_docs_batch, tantivy_index_close,
+  tantivy_index_commit, tantivy_index_delete_doc, tantivy_index_delete_docs,
+  tantivy_index_get_doc, tantivy_index_get_docs, tantivy_index_open,
+  tantivy_index_rollback, tantivy_index_search, tantivy_ping,
+  tantivy_result_free, tantivy_string_free, tantivy_suggestions_free,
+)
+import tantivy.marshal (
+  allocate_error_output, c_array_element_ptr, c_pointer_to_string_checked,
+  check_ffi_error, create_field_array, read_optional_string_field,
+  read_string_field, release_string_buffer, string_array_to_c_pointers,
+  string_to_c_buffer,
+)
 
 # Tantivy search result (Inko-side representation)
 #
@@ -223,9 +228,11 @@ impl TantivyConfig {
     # Using Path.components which normalizes the path
     for component in path_obj.components {
       match component {
-        case '..' -> return Result.Error(
-          'index_path cannot contain ".." (directory traversal not allowed)',
-        )
+        case '..' -> {
+          return Result.Error(
+            'index_path cannot contain ".." (directory traversal not allowed)',
+          )
+        }
         case _ -> {}
       }
     }
@@ -240,9 +247,7 @@ impl TantivyConfig {
 
     # Check for multiple consecutive dots which could be an obfuscation attempt
     if path.contains?('...') or path.contains?('....') {
-      return Result.Error(
-        'index_path contains suspicious dot sequences',
-      )
+      return Result.Error('index_path contains suspicious dot sequences')
     }
 
     Result.Ok(true)
@@ -355,9 +360,7 @@ impl TantivyConfig {
   # Used for reading document JSON from Tantivy
   fn pub static validate_json_buffer_size(bytes: Int) -> Result[Bool, String] {
     if bytes < 1024 {
-      return Result.Error(
-        'json_buffer_size must be at least 1KB (1,024 bytes)',
-      )
+      return Result.Error('json_buffer_size must be at least 1KB (1,024 bytes)')
     }
 
     if bytes > 100_000_000 {
@@ -371,11 +374,11 @@ impl TantivyConfig {
 
   # Validate string buffer size
   # Used for reading individual string fields (doc IDs, highlights, etc.)
-  fn pub static validate_string_buffer_size(bytes: Int) -> Result[Bool, String] {
+  fn pub static validate_string_buffer_size(
+    bytes: Int,
+  ) -> Result[Bool, String] {
     if bytes < 256 {
-      return Result.Error(
-        'string_buffer_size must be at least 256 bytes',
-      )
+      return Result.Error('string_buffer_size must be at least 256 bytes')
     }
 
     if bytes > 1_000_000 {
@@ -499,7 +502,7 @@ impl TantivyIndexManager {
   fn pub mut open -> Result[Bool, String] {
     let (c_config, _buffers) = @config.to_c_struct
 
-    let (error_out_storage, error_out_ptr) = allocate_error_output
+    let (_error_out_storage, error_out_ptr) = allocate_error_output
 
     write_usize(error_out_ptr, 0)
 
@@ -510,11 +513,11 @@ impl TantivyIndexManager {
         case Error(e) -> return Result.Error(e)
         case Ok(_) -> {
           return Result.Error(
-            'Failed to open Tantivy index at path: ${@config.index_path}. ' +
-            'Possible causes: 1) Path does not exist, 2) Insufficient permissions, ' +
-            '3) Path is not a valid directory, 4) Index is corrupted. ' +
-            'Suggestions: Check path exists, verify read/write permissions, ' +
-            'or recreate the index.',
+            'Failed to open Tantivy index at path: ${@config.index_path}. '
+              + 'Possible causes: 1) Path does not exist, 2) Insufficient permissions, '
+              + '3) Path is not a valid directory, 4) Index is corrupted. '
+              + 'Suggestions: Check path exists, verify read/write permissions, '
+              + 'or recreate the index.',
           )
         }
       }
@@ -541,10 +544,10 @@ impl TantivyIndexManager {
           Result.Ok(true)
         } else {
           Result.Error(
-            'Failed to close Tantivy index at path: ${@config.index_path}. ' +
-            'This may indicate a resource leak or data corruption. ' +
-            'The index may have been corrupted during the last operation. ' +
-            'Action: Check for disk space issues or I/O errors.',
+            'Failed to close Tantivy index at path: ${@config.index_path}. '
+              + 'This may indicate a resource leak or data corruption. '
+              + 'The index may have been corrupted during the last operation. '
+              + 'Action: Check for disk space issues or I/O errors.',
           )
         }
       }
@@ -575,7 +578,7 @@ impl TantivyIndexManager {
         let fields_buf = create_field_array(fields)
         let fields_ptr = fields_buf.pointer
 
-        let (error_out_storage, error_out_ptr) = allocate_error_output
+        let (_error_out_storage, error_out_ptr) = allocate_error_output
 
         write_usize(error_out_ptr, 0)
 
@@ -596,11 +599,11 @@ impl TantivyIndexManager {
           Result.Ok(true)
         } else {
           Result.Error(
-            'Failed to index document with ID: "${doc_id}". ' +
-            'Possible causes: 1) Invalid field names, 2) Data exceeds buffer size, ' +
-            '3) Duplicate document ID, 4) Schema mismatch. ' +
-            'Suggestions: Check field names match schema, reduce document size, ' +
-            'or verify document ID is unique.',
+            'Failed to index document with ID: "${doc_id}". '
+              + 'Possible causes: 1) Invalid field names, 2) Data exceeds buffer size, '
+              + '3) Duplicate document ID, 4) Schema mismatch. '
+              + 'Suggestions: Check field names match schema, reduce document size, '
+              + 'or verify document ID is unique.',
           )
         }
       }
@@ -688,7 +691,7 @@ impl TantivyIndexManager {
           doc_offset = doc_offset + 24
         }
 
-        let (error_out_storage, error_out_ptr) = allocate_error_output
+        let (_error_out_storage, error_out_ptr) = allocate_error_output
 
         write_usize(error_out_ptr, 0)
 
@@ -708,11 +711,11 @@ impl TantivyIndexManager {
           Result.Ok(result as Int)
         } else {
           Result.Error(
-            'Failed to add documents batch. ' +
-            'Possible causes: 1) Invalid field names in one or more documents, ' +
-            '2) Data exceeds buffer size, 3) Duplicate document IDs, 4) Schema mismatch. ' +
-            'Suggestions: Check field names match schema, reduce document sizes, ' +
-            'or verify document IDs are unique.',
+            'Failed to add documents batch. '
+              + 'Possible causes: 1) Invalid field names in one or more documents, '
+              + '2) Data exceeds buffer size, 3) Duplicate document IDs, 4) Schema mismatch. '
+              + 'Suggestions: Check field names match schema, reduce document sizes, '
+              + 'or verify document IDs are unique.',
           )
         }
       }
@@ -727,7 +730,7 @@ impl TantivyIndexManager {
         # Convert doc_id to C string
         let doc_id_buf = string_to_c_buffer(doc_id)
 
-        let (error_out_storage, error_out_ptr) = allocate_error_output
+        let (_error_out_storage, error_out_ptr) = allocate_error_output
 
         write_usize(error_out_ptr, 0)
 
@@ -746,11 +749,11 @@ impl TantivyIndexManager {
           Result.Ok(true)
         } else {
           Result.Error(
-            'Failed to delete document with ID: "${doc_id}". ' +
-            'Possible causes: 1) Document ID does not exist, 2) Index is locked, ' +
-            '3) Insufficient permissions. ' +
-            'Suggestions: Verify document ID exists, check if index is being modified, ' +
-            'or verify write permissions.',
+            'Failed to delete document with ID: "${doc_id}". '
+              + 'Possible causes: 1) Document ID does not exist, 2) Index is locked, '
+              + '3) Insufficient permissions. '
+              + 'Suggestions: Verify document ID exists, check if index is being modified, '
+              + 'or verify write permissions.',
           )
         }
       }
@@ -773,7 +776,7 @@ impl TantivyIndexManager {
         # Convert array of strings to array of C string pointers
         let c_strings = string_array_to_c_pointers(doc_ids)
 
-        let (error_out_storage, error_out_ptr) = allocate_error_output
+        let (_error_out_storage, error_out_ptr) = allocate_error_output
 
         write_usize(error_out_ptr, 0)
 
@@ -821,23 +824,17 @@ impl TantivyIndexManager {
     # Validate parameters
     match validate_query(query) {
       case Ok(_) -> {}
-      case Error(e) -> {
-        return Result.Error("Invalid query: ${e}")
-      }
+      case Error(e) -> return Result.Error('Invalid query: ${e}')
     }
 
-    match validate_limit(limit, "search") {
+    match validate_limit(limit, 'search') {
       case Ok(_) -> {}
-      case Error(e) -> {
-        return Result.Error("Invalid limit: ${e}")
-      }
+      case Error(e) -> return Result.Error('Invalid limit: ${e}')
     }
 
     match validate_offset(offset) {
       case Ok(_) -> {}
-      case Error(e) -> {
-        return Result.Error("Invalid offset: ${e}")
-      }
+      case Error(e) -> return Result.Error('Invalid offset: ${e}')
     }
 
     match @index {
@@ -878,11 +875,11 @@ impl TantivyIndexManager {
 
         if (result as Int) != 0 {
           return Result.Error(
-            'Search failed for query: "${query}" (limit: ${limit}, offset: ${offset}). ' +
-            'Possible causes: 1) Invalid query syntax, 2) Index not yet committed, ' +
-            '3) Invalid limit/offset values, 4) Field name not in schema. ' +
-            'Suggestions: Check query syntax, verify index is committed, ' +
-            'or reduce limit/offset values.',
+            'Search failed for query: "${query}" (limit: ${limit}, offset: ${offset}). '
+              + 'Possible causes: 1) Invalid query syntax, 2) Index not yet committed, '
+              + '3) Invalid limit/offset values, 4) Field name not in schema. '
+              + 'Suggestions: Check query syntax, verify index is committed, '
+              + 'or reduce limit/offset values.',
           )
         }
 
@@ -939,7 +936,7 @@ impl TantivyIndexManager {
   fn pub mut commit -> Result[Bool, String] {
     match @index {
       case Some(idx) -> {
-        let (error_out_storage, error_out_ptr) = allocate_error_output
+        let (_error_out_storage, error_out_ptr) = allocate_error_output
 
         write_usize(error_out_ptr, 0)
 
@@ -954,11 +951,11 @@ impl TantivyIndexManager {
           Result.Ok(true)
         } else {
           Result.Error(
-            'Failed to commit changes to Tantivy index. ' +
-            'Possible causes: 1) Disk is full, 2) I/O error, 3) Index corruption, ' +
-            '4) Insufficient memory. ' +
-            'Suggestions: Check disk space, verify I/O permissions, ' +
-            'or consider rolling back the last operation.',
+            'Failed to commit changes to Tantivy index. '
+              + 'Possible causes: 1) Disk is full, 2) I/O error, 3) Index corruption, '
+              + '4) Insufficient memory. '
+              + 'Suggestions: Check disk space, verify I/O permissions, '
+              + 'or consider rolling back the last operation.',
           )
         }
       }
@@ -971,7 +968,7 @@ impl TantivyIndexManager {
     match @index {
       case Some(idx) -> {
         # Allocate error output pointer
-        let (error_out_storage, error_out_ptr) = allocate_error_output
+        let (_error_out_storage, error_out_ptr) = allocate_error_output
 
         write_usize(error_out_ptr, 0)
 
@@ -986,11 +983,11 @@ impl TantivyIndexManager {
           Result.Ok(true)
         } else {
           Result.Error(
-            'Failed to rollback changes in Tantivy index. ' +
-            'Possible causes: 1) Index is in inconsistent state, 2) I/O error, ' +
-            '3) No pending changes to rollback. ' +
-            'Suggestions: Verify index state, check I/O permissions, ' +
-            'or reopen the index if needed.',
+            'Failed to rollback changes in Tantivy index. '
+              + 'Possible causes: 1) Index is in inconsistent state, 2) I/O error, '
+              + '3) No pending changes to rollback. '
+              + 'Suggestions: Verify index state, check I/O permissions, '
+              + 'or reopen the index if needed.',
           )
         }
       }
@@ -1007,7 +1004,7 @@ impl TantivyIndexManager {
         let doc_id_buf = string_to_c_buffer(doc_id)
 
         # Allocate error output pointer
-        let (error_out_storage, error_out_ptr) = allocate_error_output
+        let (_error_out_storage, error_out_ptr) = allocate_error_output
 
         write_usize(error_out_ptr, 0)
 
@@ -1081,7 +1078,7 @@ impl TantivyIndexManager {
         }
 
         let num_results_out_storage = ByteArray.filled(with: 0, times: 8)
-        let (error_out_storage, error_out_ptr) = allocate_error_output
+        let (_error_out_storage, error_out_ptr) = allocate_error_output
 
         let num_results_out_ptr = num_results_out_storage.pointer
 
@@ -1173,7 +1170,7 @@ impl TantivyIndexManager {
 
         let results_out_storage = ByteArray.filled(with: 0, times: 8)
         let num_results_out_storage = ByteArray.filled(with: 0, times: 8)
-        let (error_out_storage, error_out_ptr) = allocate_error_output
+        let (_error_out_storage, error_out_ptr) = allocate_error_output
 
         let results_out_ptr = results_out_storage.pointer
         let num_results_out_ptr = num_results_out_storage.pointer
@@ -1257,23 +1254,17 @@ impl TantivyIndexManager {
     # Validate parameters
     match validate_field_name(field) {
       case Ok(_) -> {}
-      case Error(e) -> {
-        return Result.Error("Invalid field name: ${e}")
-      }
+      case Error(e) -> return Result.Error('Invalid field name: ${e}')
     }
 
     match validate_query(prefix) {
       case Ok(_) -> {}
-      case Error(e) -> {
-        return Result.Error("Invalid prefix: ${e}")
-      }
+      case Error(e) -> return Result.Error('Invalid prefix: ${e}')
     }
 
-    match validate_limit(limit, "autocomplete") {
+    match validate_limit(limit, 'autocomplete') {
       case Ok(_) -> {}
-      case Error(e) -> {
-        return Result.Error("Invalid limit: ${e}")
-      }
+      case Error(e) -> return Result.Error('Invalid limit: ${e}')
     }
 
     match @index {
@@ -1283,7 +1274,7 @@ impl TantivyIndexManager {
 
         let results_out_storage = ByteArray.filled(with: 0, times: 8)
         let num_results_out_storage = ByteArray.filled(with: 0, times: 8)
-        let (error_out_storage, error_out_ptr) = allocate_error_output
+        let (_error_out_storage, error_out_ptr) = allocate_error_output
 
         let results_out_ptr = results_out_storage.pointer
         let num_results_out_ptr = num_results_out_storage.pointer
@@ -1307,47 +1298,47 @@ impl TantivyIndexManager {
           case Ok(_) -> {}
         }
 
-         if (result as Int) != 0 {
-           return Result.Error(
-             'Autocomplete failed for field: "${field}", prefix: "${prefix}" (no error details available)',
-           )
-         }
+        if (result as Int) != 0 {
+          return Result.Error(
+            'Autocomplete failed for field: "${field}", prefix: "${prefix}" (no error details available)',
+          )
+        }
 
-         let results_ptr_addr = read_usize(results_out_ptr)
-         let num_results = read_usize(num_results_out_ptr)
+        let results_ptr_addr = read_usize(results_out_ptr)
+        let num_results = read_usize(num_results_out_ptr)
 
-         let mut results = []
+        let mut results = []
 
-         if results_ptr_addr != 0 and num_results > 0 {
-           let results_ptr = results_ptr_addr as Pointer[UInt8]
+        if results_ptr_addr != 0 and num_results > 0 {
+          let results_ptr = results_ptr_addr as Pointer[UInt8]
 
-           let mut j = 0
+          let mut j = 0
 
-           while j < num_results {
-             let base_ptr = c_array_element_ptr(results_ptr, j, SUGGESTION_SIZE)
+          while j < num_results {
+            let base_ptr = c_array_element_ptr(results_ptr, j, SUGGESTION_SIZE)
 
-             let text = read_string_field(
-               base_ptr,
-               SUGGESTION_OFFSET_TEXT,
-               @config.string_buffer_size,
-             )
-             let score_ptr = pointer_offset(base_ptr, SUGGESTION_OFFSET_SCORE)
-               as Pointer[Float32]
-             let score = score_ptr.0 as Float
+            let text = read_string_field(
+              base_ptr,
+              SUGGESTION_OFFSET_TEXT,
+              @config.string_buffer_size,
+            )
+            let score_ptr = pointer_offset(base_ptr, SUGGESTION_OFFSET_SCORE)
+              as Pointer[Float32]
+            let score = score_ptr.0 as Float
 
-             results.push(TantivySuggestion(text: text, score: score))
+            results.push(TantivySuggestion(text: text, score: score))
 
-             j = j + 1
-           }
+            j = j + 1
+          }
 
-           tantivy_suggestions_free(results_ptr, num_results as Int64)
-         }
+          tantivy_suggestions_free(results_ptr, num_results as Int64)
+        }
 
-         Result.Ok(results)
-       }
-       case None -> Result.Error('Index is not open')
-     }
-   }
+        Result.Ok(results)
+      }
+      case None -> Result.Error('Index is not open')
+    }
+  }
 
   # Did-you-mean: Get similar terms using fuzzy query
   # distance: edit distance (0-2 typical)
@@ -1360,30 +1351,22 @@ impl TantivyIndexManager {
     # Validate parameters
     match validate_field_name(field) {
       case Ok(_) -> {}
-      case Error(e) -> {
-        return Result.Error("Invalid field name: ${e}")
-      }
+      case Error(e) -> return Result.Error('Invalid field name: ${e}')
     }
 
     match validate_query(term) {
       case Ok(_) -> {}
-      case Error(e) -> {
-        return Result.Error("Invalid term: ${e}")
-      }
+      case Error(e) -> return Result.Error('Invalid term: ${e}')
     }
 
     match validate_distance(distance) {
       case Ok(_) -> {}
-      case Error(e) -> {
-        return Result.Error("Invalid distance: ${e}")
-      }
+      case Error(e) -> return Result.Error('Invalid distance: ${e}')
     }
 
-    match validate_limit(limit, "did_you_mean") {
+    match validate_limit(limit, 'did_you_mean') {
       case Ok(_) -> {}
-      case Error(e) -> {
-        return Result.Error("Invalid limit: ${e}")
-      }
+      case Error(e) -> return Result.Error('Invalid limit: ${e}')
     }
 
     match @index {
@@ -1393,7 +1376,7 @@ impl TantivyIndexManager {
 
         let results_out_storage = ByteArray.filled(with: 0, times: 8)
         let num_results_out_storage = ByteArray.filled(with: 0, times: 8)
-        let (error_out_storage, error_out_ptr) = allocate_error_output
+        let (_error_out_storage, error_out_ptr) = allocate_error_output
 
         let results_out_ptr = results_out_storage.pointer
         let num_results_out_ptr = num_results_out_storage.pointer
@@ -1418,47 +1401,47 @@ impl TantivyIndexManager {
           case Ok(_) -> {}
         }
 
-         if (result as Int) != 0 {
-           return Result.Error(
-             'Did-you-mean failed for field: "${field}", term: "${term}" (no error details available)',
-           )
-         }
+        if (result as Int) != 0 {
+          return Result.Error(
+            'Did-you-mean failed for field: "${field}", term: "${term}" (no error details available)',
+          )
+        }
 
-         let results_ptr_addr = read_usize(results_out_ptr)
-         let num_results = read_usize(num_results_out_ptr)
+        let results_ptr_addr = read_usize(results_out_ptr)
+        let num_results = read_usize(num_results_out_ptr)
 
-         let mut results = []
+        let mut results = []
 
-         if results_ptr_addr != 0 and num_results > 0 {
-           let results_ptr = results_ptr_addr as Pointer[UInt8]
+        if results_ptr_addr != 0 and num_results > 0 {
+          let results_ptr = results_ptr_addr as Pointer[UInt8]
 
-           let mut j = 0
+          let mut j = 0
 
-           while j < num_results {
-             let base_ptr = c_array_element_ptr(results_ptr, j, SUGGESTION_SIZE)
+          while j < num_results {
+            let base_ptr = c_array_element_ptr(results_ptr, j, SUGGESTION_SIZE)
 
-             let text = read_string_field(
-               base_ptr,
-               SUGGESTION_OFFSET_TEXT,
-               @config.string_buffer_size,
-             )
-             let score_ptr = pointer_offset(base_ptr, SUGGESTION_OFFSET_SCORE)
-               as Pointer[Float32]
-             let score = score_ptr.0 as Float
+            let text = read_string_field(
+              base_ptr,
+              SUGGESTION_OFFSET_TEXT,
+              @config.string_buffer_size,
+            )
+            let score_ptr = pointer_offset(base_ptr, SUGGESTION_OFFSET_SCORE)
+              as Pointer[Float32]
+            let score = score_ptr.0 as Float
 
-             results.push(TantivySuggestion(text: text, score: score))
+            results.push(TantivySuggestion(text: text, score: score))
 
-             j = j + 1
-           }
+            j = j + 1
+          }
 
-           tantivy_suggestions_free(results_ptr, num_results as Int64)
-         }
+          tantivy_suggestions_free(results_ptr, num_results as Int64)
+        }
 
-         Result.Ok(results)
-       }
-       case None -> Result.Error('Index is not open')
-     }
-   }
+        Result.Ok(results)
+      }
+      case None -> Result.Error('Index is not open')
+    }
+  }
 }
 
 impl Drop for TantivyIndexManager {

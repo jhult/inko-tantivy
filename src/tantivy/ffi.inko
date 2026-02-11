@@ -80,7 +80,7 @@ import extern "tantivy_c"
 # External FFI functions from the Tantivy C library
 
 # Simple ping function to check if FFI library is loaded
-fn pub extern tantivy_ping() -> Int
+fn pub extern tantivy_ping -> Int
 
 fn pub extern tantivy_index_open(
   config: Pointer[UInt8],
@@ -195,4 +195,7 @@ fn pub extern tantivy_did_you_mean(
   error_out: Pointer[UInt8],
 ) -> Int32
 
-fn pub extern tantivy_suggestions_free(results: Pointer[UInt8], num_results: Int64)
+fn pub extern tantivy_suggestions_free(
+  results: Pointer[UInt8],
+  num_results: Int64,
+)

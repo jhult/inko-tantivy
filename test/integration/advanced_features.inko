@@ -4,9 +4,9 @@
 #
 # Advanced features integration tests for Tantivy FFI operations
 
+import helpers (cleanup_test_index, temp_index_path)
 import std.test (Tests)
 import tantivy.index_manager (TantivyConfig, TantivyIndexManager)
-import helpers (cleanup_test_index, temp_index_path)
 
 fn pub tests(t: mut Tests) {
   # Test aggregate_terms (facet_counts) functionality

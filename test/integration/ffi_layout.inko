@@ -75,10 +75,13 @@ fn pub tests(t: mut Tests) {
     t.equal(RESULT_OFFSET_HIGHLIGHT % 8, 0)
   })
 
-  t.test('alignment: TantivyAggregationResult fields are 8-byte aligned', fn (t) {
-    t.equal(AGGREGATION_OFFSET_KEY % 8, 0)
-    t.equal(AGGREGATION_OFFSET_COUNT % 8, 0)
-  })
+  t.test(
+    'alignment: TantivyAggregationResult fields are 8-byte aligned',
+    fn (t) {
+      t.equal(AGGREGATION_OFFSET_KEY % 8, 0)
+      t.equal(AGGREGATION_OFFSET_COUNT % 8, 0)
+    },
+  )
 
   t.test('alignment: TantivySuggestion fields are 8-byte aligned', fn (t) {
     t.equal(SUGGESTION_OFFSET_TEXT % 8, 0)
@@ -119,11 +122,14 @@ fn pub tests(t: mut Tests) {
     t.equal(RESULT_OFFSET_HIGHLIGHT, 16)
   })
 
-  t.test('backward compatibility: TantivyAggregationResult layout is stable', fn (t) {
-    t.equal(AGGREGATION_SIZE, 16)
-    t.equal(AGGREGATION_OFFSET_KEY, 0)
-    t.equal(AGGREGATION_OFFSET_COUNT, 8)
-  })
+  t.test(
+    'backward compatibility: TantivyAggregationResult layout is stable',
+    fn (t) {
+      t.equal(AGGREGATION_SIZE, 16)
+      t.equal(AGGREGATION_OFFSET_KEY, 0)
+      t.equal(AGGREGATION_OFFSET_COUNT, 8)
+    },
+  )
 
   t.test('backward compatibility: TantivySuggestion layout is stable', fn (t) {
     t.equal(SUGGESTION_SIZE, 16)

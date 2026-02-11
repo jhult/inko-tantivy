@@ -45,7 +45,10 @@ fn pub write_usize(ptr: Pointer[UInt8], value: Int) {
   if !is_aligned_to(ptr, 8) {
     let ptr_int = pointer_to_int(ptr)
     let misalignment = ptr_int % 8
-    panic('write_usize: pointer ${ptr_int} is not 8-byte aligned (offset: ${misalignment})')
+
+    panic(
+      'write_usize: pointer ${ptr_int} is not 8-byte aligned (offset: ${misalignment})',
+    )
   }
 
   # Use Int for bitwise operations (UInt64 doesn't support bitwise ops in Inko)
@@ -79,7 +82,10 @@ fn pub read_usize(ptr: Pointer[UInt8]) -> Int {
   if !is_aligned_to(ptr, 8) {
     let ptr_int = pointer_to_int(ptr)
     let misalignment = ptr_int % 8
-    panic('read_usize: pointer ${ptr_int} is not 8-byte aligned (offset: ${misalignment})')
+
+    panic(
+      'read_usize: pointer ${ptr_int} is not 8-byte aligned (offset: ${misalignment})',
+    )
   }
 
   # Read 8 bytes and combine them into a 64-bit integer
