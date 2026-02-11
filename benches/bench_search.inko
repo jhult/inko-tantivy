@@ -10,7 +10,8 @@
 
 import std.stdio (Stdout)
 import std.time (Duration, Instant)
-import tantivy (TantivyConfig, TantivyIndexManager, TantivyQueryBuilder)
+import tantivy.index_manager (TantivyConfig, TantivyIndexManager)
+import tantivy.query_builder (TantivyQueryBuilder)
 import memory_tracker (MemoryTracker)
 
 # Benchmark statistics

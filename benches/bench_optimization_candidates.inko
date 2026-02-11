@@ -4,7 +4,7 @@
 
 import std.stdio (STDOUT)
 import std.time (Duration, Instant)
-import tantivy (TantivyConfig, TantivyIndexManager)
+import tantivy.index_manager (TantivyConfig, TantivyIndexManager)
 
 # Benchmark statistics
 type BenchmarkStats {
