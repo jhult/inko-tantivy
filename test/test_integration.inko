@@ -15,6 +15,7 @@ import integration.ffi_layout
 import integration.persistence
 import integration.search_operations
 import integration.validation
+import integration.error_paths
 import std.test (Tests)
 import tantivy.index_manager (TantivyConfig)
 
@@ -62,4 +63,7 @@ fn pub tests(t: mut Tests) {
 
   # Resource limit validation
   validation.tests(t)
+
+  # Error paths
+  error_paths.tests(t)
 }

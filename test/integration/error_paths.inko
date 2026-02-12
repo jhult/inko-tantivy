@@ -1,0 +1,299 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+#
+# Error path tests - verify behavior for operations on closed index
+
+import helpers (cleanup_test_index, ffi_available, temp_index_path)
+import std.test (Tests)
+import tantivy.index_manager (TantivyConfig, TantivyIndexManager)
+
+fn pub tests(t: mut Tests) {
+  if !ffi_available { return }
+
+  t.test('add_doc on closed index returns error', fn (t) {
+    let path = temp_index_path('error-closed-001')
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> {
+        cleanup_test_index(path)
+        t.true(false)
+        return
+      }
+    }
+
+    let mut manager = TantivyIndexManager.new(config)
+
+    match manager.open {
+      case Ok(_) -> {
+        let _ = manager.close
+
+        let fields = [
+          ('subject', 'Test'),
+          ('from', 'test@example.com'),
+          ('body', 'Body'),
+        ]
+
+        match manager.add_doc('closed-doc', fields) {
+          case Ok(_) -> t.true(false)
+          case Error(_) -> t.true(true)
+        }
+      }
+      case Error(_) -> t.true(false)
+    }
+
+    cleanup_test_index(path)
+  })
+
+  t.test('delete_doc on closed index returns error', fn (t) {
+    let path = temp_index_path('error-closed-002')
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> {
+        cleanup_test_index(path)
+        t.true(false)
+        return
+      }
+    }
+
+    let mut manager = TantivyIndexManager.new(config)
+
+    match manager.open {
+      case Ok(_) -> {
+        let _ = manager.close
+
+        match manager.delete_doc('doc-id') {
+          case Ok(_) -> t.true(false)
+          case Error(_) -> t.true(true)
+        }
+      }
+      case Error(_) -> t.true(false)
+    }
+
+    cleanup_test_index(path)
+  })
+
+  t.test('search on closed index returns error', fn (t) {
+    let path = temp_index_path('error-closed-003')
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> {
+        cleanup_test_index(path)
+        t.true(false)
+        return
+      }
+    }
+
+    let mut manager = TantivyIndexManager.new(config)
+
+    match manager.open {
+      case Ok(_) -> {
+        let _ = manager.close
+
+        match manager.search('query', 10, 0) {
+          case Ok(_) -> t.true(false)
+          case Error(_) -> t.true(true)
+        }
+      }
+      case Error(_) -> t.true(false)
+    }
+
+    cleanup_test_index(path)
+  })
+
+  t.test('commit on closed index returns error', fn (t) {
+    let path = temp_index_path('error-closed-004')
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> {
+        cleanup_test_index(path)
+        t.true(false)
+        return
+      }
+    }
+
+    let mut manager = TantivyIndexManager.new(config)
+
+    match manager.open {
+      case Ok(_) -> {
+        let _ = manager.close
+
+        match manager.commit {
+          case Ok(_) -> t.true(false)
+          case Error(_) -> t.true(true)
+        }
+      }
+      case Error(_) -> t.true(false)
+    }
+
+    cleanup_test_index(path)
+  })
+
+  t.test('get_doc on closed index returns error', fn (t) {
+    let path = temp_index_path('error-closed-005')
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> {
+        cleanup_test_index(path)
+        t.true(false)
+        return
+      }
+    }
+
+    let mut manager = TantivyIndexManager.new(config)
+
+    match manager.open {
+      case Ok(_) -> {
+        let _ = manager.close
+
+        match manager.get_doc('doc-id') {
+          case Ok(_) -> t.true(false)
+          case Error(_) -> t.true(true)
+        }
+      }
+      case Error(_) -> t.true(false)
+    }
+
+    cleanup_test_index(path)
+  })
+
+  t.test('autocomplete on closed index returns error', fn (t) {
+    let path = temp_index_path('error-closed-006')
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> {
+        cleanup_test_index(path)
+        t.true(false)
+        return
+      }
+    }
+
+    let mut manager = TantivyIndexManager.new(config)
+
+    match manager.open {
+      case Ok(_) -> {
+        let _ = manager.close
+
+        match manager.autocomplete('field', 'prefix', 10) {
+          case Ok(_) -> t.true(false)
+          case Error(_) -> t.true(true)
+        }
+      }
+      case Error(_) -> t.true(false)
+    }
+
+    cleanup_test_index(path)
+  })
+
+  t.test('did_you_mean on closed index returns error', fn (t) {
+    let path = temp_index_path('error-closed-007')
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> {
+        cleanup_test_index(path)
+        t.true(false)
+        return
+      }
+    }
+
+    let mut manager = TantivyIndexManager.new(config)
+
+    match manager.open {
+      case Ok(_) -> {
+        let _ = manager.close
+
+        match manager.did_you_mean('field', 'misspelled', 2, 10) {
+          case Ok(_) -> t.true(false)
+          case Error(_) -> t.true(true)
+        }
+      }
+      case Error(_) -> t.true(false)
+    }
+
+    cleanup_test_index(path)
+  })
+
+  t.test('aggregate_terms on closed index returns error', fn (t) {
+    let path = temp_index_path('error-closed-008')
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> {
+        cleanup_test_index(path)
+        t.true(false)
+        return
+      }
+    }
+
+    let mut manager = TantivyIndexManager.new(config)
+
+    match manager.open {
+      case Ok(_) -> {
+        let _ = manager.close
+
+        match manager.aggregate_terms('field', 'query', 10) {
+          case Ok(_) -> t.true(false)
+          case Error(_) -> t.true(true)
+        }
+      }
+      case Error(_) -> t.true(false)
+    }
+
+    cleanup_test_index(path)
+  })
+
+  t.test('get_facet_counts on closed index returns error', fn (t) {
+    let path = temp_index_path('error-closed-009')
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> {
+        cleanup_test_index(path)
+        t.true(false)
+        return
+      }
+    }
+
+    let mut manager = TantivyIndexManager.new(config)
+
+    match manager.open {
+      case Ok(_) -> {
+        let _ = manager.close
+
+        match manager.get_facet_counts('field', 'query') {
+          case Ok(_) -> t.true(false)
+          case Error(_) -> t.true(true)
+        }
+      }
+      case Error(_) -> t.true(false)
+    }
+
+    cleanup_test_index(path)
+  })
+
+  t.test('rollback on closed index returns error', fn (t) {
+    let path = temp_index_path('error-closed-010')
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> {
+        cleanup_test_index(path)
+        t.true(false)
+        return
+      }
+    }
+
+    let mut manager = TantivyIndexManager.new(config)
+
+    match manager.open {
+      case Ok(_) -> {
+        let _ = manager.close
+
+        match manager.rollback {
+          case Ok(_) -> t.true(false)
+          case Error(_) -> t.true(true)
+        }
+      }
+      case Error(_) -> t.true(false)
+    }
+
+    cleanup_test_index(path)
+  })
+}
