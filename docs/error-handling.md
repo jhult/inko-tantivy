@@ -140,11 +140,11 @@ Result.Error('Commit failed')
 
 ### Provide Actionable Information
 
-Include suggestions for fixing the error:
+Include suggestions for fixing error:
 
 **Good:**
 ```inko
-Result.Error('Index path cannot be empty. Provide a valid path to the index directory.')
+Result.Error('Index path cannot be empty. Provide a valid path to index directory.')
 Result.Error('reader_memory_budget_bytes must be at least 10MB (10,000,000 bytes), got ${bytes}')
 Result.Error('Document exceeds maximum size (${TANTIVY_JSON_BUFFER_SIZE} bytes). Reduce document size or increase buffer.')
 ```
@@ -430,7 +430,9 @@ type CircuitBreaker {
   let mut @failures: Int
   let @threshold: Int
   let mut @last_failure: Int
+}
 
+impl CircuitBreaker {
   fn pub static new(threshold: Int) -> CircuitBreaker {
     CircuitBreaker(failures: 0, threshold: threshold, last_failure: 0)
   }
@@ -533,12 +535,92 @@ match add_doc(doc_id, fields) {
   case Ok(_) -> {}
   case Error(e) -> {
     if e.contains?('schema') or e.contains?('field type') {
-      return Result.Error('Schema mismatch. Check that all fields match the index schema: ${e}')
+      return Result.Error('Schema mismatch. Check that all fields match index schema: ${e}')
     }
     Result.Error(e)
   }
 }
 ```
+
+## Appropriate Error Handling Patterns by Context
+
+### Production Code
+
+**Always use Result types and return errors:**
+
+```inko
+match operation() {
+  case Ok(result) -> Result.Ok(result)
+  case Error(e) -> Result.Error(e)
+}
+```
+
+**Never ignore errors silently:**
+
+- Ignoring errors can hide bugs
+- Makes debugging difficult
+- Violates type safety
+
+### Test Code
+
+**Panics are acceptable for invariant violations:**
+
+```inko
+t.test('config rejects invalid path', fn (t) {
+  match TantivyConfig.new('') {
+    case Ok(_) -> panic('Should have failed for empty path')
+    case Error(_) -> t.true(true)
+  }
+})
+```
+
+**Use panic for test setup failures:**
+
+```inko
+match manager.open {
+  case Ok(_) -> {}
+  case Error(_) -> panic('Config creation failed - cannot run test')
+}
+```
+
+### Cleanup Code
+
+**Silent ignore is acceptable for cleanup operations:**
+
+```inko
+fn pub cleanup_test_index(path: String) {
+  let p = Path.new(path)
+  match p.remove_directory_all {
+    case Ok(_) -> {}
+    case Error(_) -> {
+      # Silently ignore - directory may not exist or be locked
+      # This prevents cascading test failures
+    }
+  }
+}
+```
+
+**When to silently ignore:**
+- Cleanup operations where resource may not exist
+- Best-effort cleanup after tests
+- Operations where failure doesn't affect test outcome
+
+**When NOT to silently ignore:**
+- Core business logic
+- User-facing operations
+- Operations that affect data integrity
+
+### When to Panic vs Return Error
+
+**Use `panic()` when:**
+- Test invariants are violated (should never happen)
+- Test setup fails (can't proceed with test)
+- Assertion failures in tests
+
+**Use `Result.Error()` when:**
+- Production code error handling
+- Expected error conditions
+- User-facing errors
 
 ## Summary
 
