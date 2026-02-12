@@ -1,0 +1,215 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+#
+# Index persistence tests - verify data survives close/reopen cycles
+
+import helpers (cleanup_test_index, ffi_available, temp_index_path)
+import std.test (Tests)
+import tantivy.index_manager (TantivyConfig, TantivyIndexManager)
+
+fn pub tests(t: mut Tests) {
+  if !ffi_available { return }
+
+  t.test('Documents persist after close and reopen', fn (t) {
+    let path = temp_index_path('persistence-001')
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> {
+        cleanup_test_index(path)
+        t.true(false)
+        return
+      }
+    }
+
+    let mut manager = TantivyIndexManager.new(config)
+
+    match manager.open {
+      case Ok(_) -> {
+        let fields = [
+          ('subject', 'Test document'),
+          ('from', 'test@example.com'),
+          ('body', 'Test body content'),
+        ]
+
+        match manager.add_doc('persist-doc', fields) {
+          case Ok(_) -> {}
+          case Error(_) -> {
+            let _ = manager.close
+            cleanup_test_index(path)
+            t.true(false)
+            return
+          }
+        }
+
+        let _ = manager.commit
+        let _ = manager.close
+
+        let config2 = match TantivyConfig.new(path) {
+          case Ok(c) -> c
+          case Error(_) -> {
+            cleanup_test_index(path)
+            t.true(false)
+            return
+          }
+        }
+        let mut manager2 = TantivyIndexManager.new(config2)
+        match manager2.open {
+          case Ok(_) -> {
+            match manager2.search('document', 10, 0) {
+              case Ok(results) -> {
+                let result_count = results.size
+                if result_count == 5 {
+                  t.true(true)
+                } else {
+                  t.false(true)
+                }
+              }
+              case Error(_) -> t.true(false)
+            }
+            let _ = manager2.close
+          }
+          case Error(_) -> t.true(false)
+        }
+      }
+      case Error(_) -> t.true(false)
+    }
+
+    cleanup_test_index(path)
+  })
+
+  t.test('Autocomplete data persists after close and reopen', fn (t) {
+    let path = temp_index_path('persistence-003')
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> {
+        cleanup_test_index(path)
+        t.true(false)
+        return
+      }
+    }
+
+    let mut manager = TantivyIndexManager.new(config)
+
+    match manager.open {
+      case Ok(_) -> {
+        let fields = [
+          ('subject', 'autocomplete test'),
+          ('from', 'test@example.com'),
+          ('body', 'body content'),
+        ]
+
+        let _ = manager.add_doc('auto-doc', fields)
+        let _ = manager.commit
+        let _ = manager.close
+
+        let config2 = match TantivyConfig.new(path) {
+          case Ok(c) -> c
+          case Error(_) -> {
+            cleanup_test_index(path)
+            t.true(false)
+            return
+          }
+        }
+        let mut manager2 = TantivyIndexManager.new(config2)
+        match manager2.open {
+          case Ok(_) -> {
+            match manager2.autocomplete('subject', 'aut', 10) {
+              case Ok(results) -> {
+                let result_count = results.size
+                if result_count == 1 {
+                  t.true(true)
+                } else {
+                  t.false(true)
+                }
+              }
+              case Error(_) -> t.true(false)
+            }
+            let _ = manager2.close
+          }
+          case Error(_) -> t.true(false)
+        }
+      }
+      case Error(_) -> t.true(false)
+    }
+
+    cleanup_test_index(path)
+  })
+
+  t.test('Partial commit data persists after close and reopen', fn (t) {
+    let path = temp_index_path('persistence-004')
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> {
+        cleanup_test_index(path)
+        t.true(false)
+        return
+      }
+    }
+
+    let mut manager = TantivyIndexManager.new(config)
+
+    match manager.open {
+      case Ok(_) -> {
+        let fields1 = [
+          ('subject', 'committed document'),
+          ('from', 'test@example.com'),
+          ('body', 'body content'),
+        ]
+
+        let fields2 = [
+          ('subject', 'uncommitted document'),
+          ('from', 'test2@example.com'),
+          ('body', 'body content'),
+        ]
+
+        let _ = manager.add_doc('committed-doc', fields1)
+        let _ = manager.commit
+
+        let _ = manager.add_doc('uncommitted-doc', fields2)
+
+        let _ = manager.close
+
+        let config2 = match TantivyConfig.new(path) {
+          case Ok(c) -> c
+          case Error(_) -> {
+            cleanup_test_index(path)
+            t.true(false)
+            return
+          }
+        }
+        let mut manager2 = TantivyIndexManager.new(config2)
+        match manager2.open {
+          case Ok(_) -> {
+            match manager2.search('committed', 10, 0) {
+              case Ok(results) -> {
+                let result_count = results.size
+                if result_count == 1 {
+                  match manager2.search('uncommitted', 10, 0) {
+                    case Ok(results2) -> {
+                      let result_count2 = results2.size
+                      if result_count2 == 0 {
+                        t.true(true)
+                      } else {
+                        t.false(true)
+                      }
+                    }
+                    case Error(_) -> t.true(false)
+                  }
+                } else {
+                  t.false(true)
+                }
+              }
+              case Error(_) -> t.true(false)
+            }
+            let _ = manager2.close
+          }
+          case Error(_) -> t.true(false)
+        }
+      }
+      case Error(_) -> t.true(false)
+    }
+
+    cleanup_test_index(path)
+  })
+}

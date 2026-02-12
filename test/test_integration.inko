@@ -12,6 +12,7 @@ import integration.batch_operations
 import integration.crud_operations
 import integration.edge_cases
 import integration.ffi_layout
+import integration.persistence
 import integration.search_operations
 import integration.validation
 import std.test (Tests)
@@ -43,6 +44,9 @@ fn pub tests(t: mut Tests) {
 
   # Core CRUD operations
   crud_operations.tests(t)
+
+  # Persistence tests
+  persistence.tests(t)
 
   # Search operations
   search_operations.tests(t)
