@@ -14,6 +14,37 @@ import tantivy.ffi (
   FIELD_OFFSET_VALUE, FIELD_SIZE, TANTIVY_ERROR_BUFFER_SIZE, tantivy_error_free,
 )
 
+# FFI Context manages lifetime of buffers for FFI operations
+type pub FFIContext {
+  let mut @strings: Array[String]
+  let mut @buffers: Array[ByteArray]
+  let mut @errors: Array[ByteArray]
+}
+
+impl FFIContext {
+  fn pub static new -> Self {
+    FFIContext(strings: [], buffers: [], errors: [])
+  }
+
+  fn pub mut retain_string(s: String) {
+    @strings.push(s)
+  }
+
+  fn pub mut retain_buffer(buffer: ByteArray) {
+    @buffers.push(buffer)
+  }
+
+  fn pub mut retain_error_buffer(buffer: ByteArray) {
+    @errors.push(buffer)
+  }
+
+  fn pub mut clear {
+    @strings = []
+    @buffers = []
+    @errors = []
+  }
+}
+
 # Helper: Join array of strings with separator
 fn pub join_strings(strings: ref Array[String], sep: String) -> String {
   let mut buffer = StringBuffer.new
@@ -254,70 +285,35 @@ fn pub check_ffi_error(error_out_ptr: Pointer[UInt8]) -> Result[Nil, String] {
 
 # Convert array of Inko strings to array of C string pointers
 #
-# ## Lifetime Requirements (CRITICAL)
-#
-# The returned ByteArray contains pointers to intermediate string buffers.
-# **These pointers are only valid for a very short window**: from when this
-# function returns until the FFI call that uses them completes.
-#
-# ### Safety Explanation
-#
-# This function creates ByteArray buffers for each string but only returns
-# the pointer array. The intermediate buffers (c_buf) go out of scope within
-# the function, but Inko's memory management keeps them alive until the
-# function returns and the pointers are used.
-#
-# ### Correct Usage
-#
-# ```inko
-# # GOOD: Use pointers immediately in same scope
-# let c_strings = string_array_to_c_pointers(doc_ids)
-# let result = tantivy_index_delete_docs(idx, c_strings.pointer, count, error)
-# # FFI call completes here, buffers can now be dropped
-# ```
-#
-# ### Incorrect Usage
-#
-# ```inko
-# # BAD: Storing result for later use - buffers will be freed!
-# let c_strings = string_array_to_c_pointers(doc_ids)
-# some_global_state.store(c_strings)  # Pointers become invalid here
-# # Later call to FFI would use freed memory -> undefined behavior
-# ```
-#
-# ### Implementation Notes
-#
-# The current design works because:
-# 1. Caller uses pointers immediately in same scope
-# 2. Inko's memory model keeps intermediate buffers alive during the function call
-# 3. No long-term storage of the returned ByteArray is needed
-#
-# ### Alternative Design
-#
-# Consider returning (pointers: ByteArray, buffers: Array[ByteArray]) to
-# make buffer ownership explicit. This would prevent misuse but adds overhead
-# of tracking buffers explicitly.
+# The returned FFIContext owns all string objects, ensuring they stay alive
+# until the context is dropped. This prevents use-after-free bugs.
 #
 # Parameters:
 #   strings: Array of Inko strings to convert
 #
 # Returns:
-#   ByteArray containing C string pointers (8 bytes per pointer)
+#   (pointers: ByteArray, ctx: FFIContext) where pointers contains C string
+#   pointers (8 bytes per pointer) and ctx owns the string objects
 #
-# See Also:
-#   docs/memory.md for detailed FFI memory ownership rules
-fn pub string_array_to_c_pointers(strings: Array[String]) -> ByteArray {
+# Usage:
+#   let (c_strings, ctx) = string_array_to_c_pointers(strings)
+#   let result = tantivy_ffi_call(c_strings.pointer)
+#   # ctx keeps strings alive until scope ends
+fn pub string_array_to_c_pointers(
+  strings: Array[String],
+) -> (ByteArray, FFIContext) {
   let pointers = ByteArray.filled(with: 0, times: strings.size * 8)
+  let mut ctx = FFIContext.new
   let mut i = 0
 
   for s in strings {
-    let c_buf = string_to_c_buffer(s)
-    let ptr = c_buf.pointer
+    ctx.retain_string(s)
+    let ptr = s.pointer
     let ptr_int = pointer_to_int(ptr)
     let _ = write_usize(pointer_offset(pointers.pointer, i), ptr_int)
 
     i = i + 8
   }
 
-  pointers
+  (pointers, ctx)
 }

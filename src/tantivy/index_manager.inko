@@ -785,7 +785,8 @@ impl TantivyIndexManager {
         let doc_ids_count = doc_ids.size
 
         # Convert array of strings to array of C string pointers
-        let c_strings = string_array_to_c_pointers(doc_ids)
+        # The _ctx keeps string buffers alive for the FFI call
+        let (c_strings, _ctx) = string_array_to_c_pointers(doc_ids)
 
         let (_error_out_storage, error_out_ptr) = allocate_and_init_error
 
@@ -1038,12 +1039,8 @@ impl TantivyIndexManager {
                 )
               } else {
                 Result.Ok(json_str)
-          }
-
-          # Clear string_buffers after processing this document
-          # This ensures only one document's strings are kept alive at a time
-          string_buffers.clear
-        }
+              }
+            }
           }
         }
       }
