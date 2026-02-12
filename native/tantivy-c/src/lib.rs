@@ -20,8 +20,8 @@ use std::mem::{self, offset_of, ManuallyDrop};
 use std::path::Path;
 use std::slice;
 use tantivy::{
-    collector::TopDocs, query::QueryParser, schema::*, Index, IndexReader, IndexWriter,
-    ReloadPolicy,
+    collector::TopDocs, query::QueryParser, schema::IndexRecordOption, schema::*, Index,
+    IndexReader, IndexWriter, ReloadPolicy,
 };
 
 // Default search fields - single source of truth for field names
@@ -1257,11 +1257,26 @@ pub unsafe extern "C" fn tantivy_index_search(
 
     // Execute search
     // Collect enough documents to handle offset + limit for pagination
+    // Use checked_add to prevent integer overflow (CWE-190)
     let searcher = wrapper.reader.searcher();
-    let top_docs = match searcher.search(
-        &parsed_query,
-        &TopDocs::with_limit((offset + limit) as usize),
-    ) {
+    let total = match offset.checked_add(limit) {
+        Some(t) => t,
+        None => {
+            *error_out = create_error_string("Offset + limit overflow");
+            return -1;
+        }
+    };
+
+    // Validate total against MAX_SEARCH_LIMIT
+    if total > MAX_SEARCH_LIMIT {
+        *error_out = create_error_string(&format!(
+            "Total results too large: {} exceeds maximum of {}",
+            total, MAX_SEARCH_LIMIT
+        ));
+        return -1;
+    }
+
+    let top_docs = match searcher.search(&parsed_query, &TopDocs::with_limit(total)) {
         Ok(docs) => docs,
         Err(e) => {
             *error_out = create_error_string(&format!("Search failed: {}", e));
@@ -1336,19 +1351,23 @@ pub unsafe extern "C" fn tantivy_index_get_doc(
         }
     };
 
-    // Create a query to find the document by ID using QueryParser
-    let query_str = format!("id:{}", id_str);
-    let query_parser = QueryParser::for_index(&wrapper.index, vec![]);
-    let parsed_query = match query_parser.parse_query(&query_str) {
-        Ok(q) => q,
+    // Use Term-based query to prevent query injection (CWE-943)
+    // Term queries are safe from injection as they don't use QueryParser
+    let id_field = match wrapper.schema.get_field("id") {
+        Ok(field) => field,
         Err(e) => {
-            *error_out = create_error_string(&format!("Failed to parse query: {}", e));
+            *error_out = create_error_string(&format!("ID field not found: {}", e));
             return std::ptr::null_mut();
         }
     };
 
+    let term_query = tantivy::query::TermQuery::new(
+        tantivy::Term::from_field_text(id_field, &id_str),
+        IndexRecordOption::Basic,
+    );
+
     let searcher = wrapper.reader.searcher();
-    let top_docs = match searcher.search(&parsed_query, &TopDocs::with_limit(1)) {
+    let top_docs = match searcher.search(&term_query, &TopDocs::with_limit(1)) {
         Ok(docs) => docs,
         Err(e) => {
             *error_out = create_error_string(&format!("Get doc failed: {}", e));
@@ -1561,6 +1580,16 @@ pub unsafe extern "C" fn tantivy_index_get_docs(
     let ids_slice = slice::from_raw_parts(doc_ids, num_ids);
     let mut results = Vec::new();
 
+    let id_field = match wrapper.schema.get_field("id") {
+        Ok(field) => field,
+        Err(e) => {
+            *error_out = create_error_string(&format!("ID field not found: {}", e));
+            return std::ptr::null_mut();
+        }
+    };
+
+    let searcher = wrapper.reader.searcher();
+
     for &id_ptr in ids_slice {
         let id_str = match c_str_to_string(id_ptr) {
             Ok(id) => id,
@@ -1570,18 +1599,13 @@ pub unsafe extern "C" fn tantivy_index_get_docs(
             }
         };
 
-        let query_str = format!("id:{}", id_str);
-        let query_parser = QueryParser::for_index(&wrapper.index, vec![]);
-        let parsed_query = match query_parser.parse_query(&query_str) {
-            Ok(q) => q,
-            Err(_) => {
-                results.push(std::ptr::null_mut());
-                continue;
-            }
-        };
+        // Use Term-based query to prevent query injection (CWE-943)
+        let term_query = tantivy::query::TermQuery::new(
+            tantivy::Term::from_field_text(id_field, &id_str),
+            IndexRecordOption::Basic,
+        );
 
-        let searcher = wrapper.reader.searcher();
-        let top_docs = match searcher.search(&parsed_query, &TopDocs::with_limit(1)) {
+        let top_docs = match searcher.search(&term_query, &TopDocs::with_limit(1)) {
             Ok(docs) => docs,
             Err(_) => {
                 results.push(std::ptr::null_mut());
