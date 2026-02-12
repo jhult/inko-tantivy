@@ -440,6 +440,22 @@ fn string_to_c_string(s: &str) -> *mut c_char {
     }
 }
 
+// Helper: Escape special characters in query strings to prevent injection (CWE-78)
+// Escapes: " ' + - ( ) : * ? \ and whitespace
+fn escape_query_string(s: &str) -> String {
+    let mut result = String::with_capacity(s.len() * 2);
+    for c in s.chars() {
+        match c {
+            '"' | '\'' | '+' | '-' | '(' | ')' | ':' | '*' | '?' | '\\' | ' ' => {
+                result.push('\\');
+                result.push(c);
+            }
+            _ => result.push(c),
+        }
+    }
+    result
+}
+
 // Helper: Sanitize error messages to remove filesystem paths
 fn sanitize_error_message(msg: &str) -> String {
     // Replace absolute paths with generic placeholders to prevent leaking filesystem structure
@@ -1870,8 +1886,12 @@ pub unsafe extern "C" fn tantivy_autocomplete(
         return -1;
     }
 
+    // Escape prefix string to prevent query injection (CWE-78)
+    let escaped_prefix = escape_query_string(&prefix_str);
+
     // Use wildcard query for efficient prefix matching (better than exact TermQuery for autocomplete)
-    let query_str = format!("{}:{}*", field_str, prefix_str);
+    // The wildcard character (*) is appended AFTER escaping to maintain prefix functionality
+    let query_str = format!("{}:{}*", field_str, escaped_prefix);
     let query_parser = QueryParser::for_index(&wrapper.index, vec![field_entry]);
     let prefix_query = match query_parser.parse_query(&query_str) {
         Ok(q) => q,
