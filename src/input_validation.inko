@@ -14,11 +14,6 @@ let pub MAX_FIELD_VALUE_LENGTH = 1_048_576
 # Maximum query string length
 let pub MAX_QUERY_LENGTH = 8192
 
-# Valid characters for document IDs and field names (alphanumeric, underscore, dash)
-fn pub is_valid_identifier(s: String) -> Bool {
-  true
-}
-
 # Validate document ID
 fn pub validate_doc_id(doc_id: String) -> Result[String, String] {
   if doc_id.size == 0 { return Result.Error('Document ID cannot be empty') }
