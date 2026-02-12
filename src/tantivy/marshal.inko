@@ -211,6 +211,14 @@ fn pub allocate_error_output -> (ByteArray, Pointer[UInt8]) {
   (error_out_storage, error_out_ptr)
 }
 
+# Helper: Allocate and initialize error output storage
+# Returns storage (for lifetime) and pointer (for FFI)
+fn pub allocate_and_init_error -> (ByteArray, Pointer[UInt8]) {
+  let (storage, ptr) = allocate_error_output
+  write_usize(ptr, 0)
+  (storage, ptr)
+}
+
 # Helper: Check FFI error pointer and return error message if present
 # Returns Result.Ok(nil) if no error, Result.Error(message) if error occurred
 fn pub check_ffi_error(error_out_ptr: Pointer[UInt8]) -> Result[Nil, String] {

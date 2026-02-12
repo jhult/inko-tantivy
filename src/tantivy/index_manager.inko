@@ -35,10 +35,10 @@ import tantivy.ffi (
   tantivy_result_free, tantivy_string_free, tantivy_suggestions_free,
 )
 import tantivy.marshal (
-  allocate_error_output, c_array_element_ptr, c_pointer_to_string_checked,
-  check_ffi_error, create_field_array, read_optional_string_field,
-  read_string_field, release_string_buffer, string_array_to_c_pointers,
-  string_to_c_buffer,
+  allocate_and_init_error, c_array_element_ptr,
+  c_pointer_to_string_checked, check_ffi_error, create_field_array,
+  read_optional_string_field, read_string_field, release_string_buffer,
+  string_array_to_c_pointers, string_to_c_buffer,
 )
 
 # Tantivy search result (Inko-side representation)
@@ -502,9 +502,7 @@ impl TantivyIndexManager {
   fn pub mut open -> Result[Bool, String] {
     let (c_config, _buffers) = @config.to_c_struct
 
-    let (_error_out_storage, error_out_ptr) = allocate_error_output
-
-    write_usize(error_out_ptr, 0)
+    let (_error_out_storage, error_out_ptr) = allocate_and_init_error
 
     let index_ptr = tantivy_index_open(c_config.pointer, error_out_ptr)
 
@@ -536,9 +534,7 @@ impl TantivyIndexManager {
   fn pub mut close -> Result[Bool, String] {
     match @index {
       case Some(idx) -> {
-        let (_error_out_storage, error_out_ptr) = allocate_error_output
-
-        write_usize(error_out_ptr, 0)
+        let (_error_out_storage, error_out_ptr) = allocate_and_init_error
 
         let result = tantivy_index_close(idx, error_out_ptr)
 
@@ -594,9 +590,7 @@ impl TantivyIndexManager {
         let (fields_buf, _strings) = create_field_array(fields)
         let fields_ptr = fields_buf.pointer
 
-        let (_error_out_storage, error_out_ptr) = allocate_error_output
-
-        write_usize(error_out_ptr, 0)
+        let (_error_out_storage, error_out_ptr) = allocate_and_init_error
 
         let result = tantivy_index_add_doc(
           idx,
@@ -707,9 +701,7 @@ impl TantivyIndexManager {
           doc_offset = doc_offset + 24
         }
 
-        let (_error_out_storage, error_out_ptr) = allocate_error_output
-
-        write_usize(error_out_ptr, 0)
+        let (_error_out_storage, error_out_ptr) = allocate_and_init_error
 
         let result = tantivy_index_add_docs_batch(
           idx,
@@ -746,9 +738,7 @@ impl TantivyIndexManager {
         # Convert doc_id to C string
         let doc_id_buf = string_to_c_buffer(doc_id)
 
-        let (_error_out_storage, error_out_ptr) = allocate_error_output
-
-        write_usize(error_out_ptr, 0)
+        let (_error_out_storage, error_out_ptr) = allocate_and_init_error
 
         let result = tantivy_index_delete_doc(
           idx,
@@ -792,9 +782,7 @@ impl TantivyIndexManager {
         # Convert array of strings to array of C string pointers
         let c_strings = string_array_to_c_pointers(doc_ids)
 
-        let (_error_out_storage, error_out_ptr) = allocate_error_output
-
-        write_usize(error_out_ptr, 0)
+        let (_error_out_storage, error_out_ptr) = allocate_and_init_error
 
         # Call batch delete
         let result = tantivy_index_delete_docs(
@@ -952,9 +940,7 @@ impl TantivyIndexManager {
   fn pub mut commit -> Result[Bool, String] {
     match @index {
       case Some(idx) -> {
-        let (_error_out_storage, error_out_ptr) = allocate_error_output
-
-        write_usize(error_out_ptr, 0)
+        let (_error_out_storage, error_out_ptr) = allocate_and_init_error
 
         let result = tantivy_index_commit(idx, error_out_ptr)
 
@@ -983,10 +969,7 @@ impl TantivyIndexManager {
   fn pub mut rollback -> Result[Bool, String] {
     match @index {
       case Some(idx) -> {
-        # Allocate error output pointer
-        let (_error_out_storage, error_out_ptr) = allocate_error_output
-
-        write_usize(error_out_ptr, 0)
+        let (_error_out_storage, error_out_ptr) = allocate_and_init_error
 
         let result = tantivy_index_rollback(idx, error_out_ptr)
 
@@ -1019,12 +1002,9 @@ impl TantivyIndexManager {
         # Convert doc_id to C string
         let doc_id_buf = string_to_c_buffer(doc_id)
 
-        # Allocate error output pointer
-        let (_error_out_storage, error_out_ptr) = allocate_error_output
+        let (_error_out_storage, error_out_ptr) = allocate_and_init_error
 
-        write_usize(error_out_ptr, 0)
-
-        # Call the FFI function
+        # Call FFI function
         let result_ptr = tantivy_index_get_doc(
           idx,
           doc_id_buf.pointer,
@@ -1094,12 +1074,11 @@ impl TantivyIndexManager {
         }
 
         let num_results_out_storage = ByteArray.filled(with: 0, times: 8)
-        let (_error_out_storage, error_out_ptr) = allocate_error_output
+        let (_error_out_storage, error_out_ptr) = allocate_and_init_error
 
         let num_results_out_ptr = num_results_out_storage.pointer
 
         write_usize(num_results_out_ptr, 0)
-        write_usize(error_out_ptr, 0)
 
         # Call the FFI function
         let results_ptr = tantivy_index_get_docs(
@@ -1186,14 +1165,13 @@ impl TantivyIndexManager {
 
         let results_out_storage = ByteArray.filled(with: 0, times: 8)
         let num_results_out_storage = ByteArray.filled(with: 0, times: 8)
-        let (_error_out_storage, error_out_ptr) = allocate_error_output
+        let (_error_out_storage, error_out_ptr) = allocate_and_init_error
 
         let results_out_ptr = results_out_storage.pointer
         let num_results_out_ptr = num_results_out_storage.pointer
 
         write_usize(results_out_ptr, 0)
         write_usize(num_results_out_ptr, 0)
-        write_usize(error_out_ptr, 0)
 
         let result = tantivy_aggregate_terms(
           idx,
@@ -1290,14 +1268,13 @@ impl TantivyIndexManager {
 
         let results_out_storage = ByteArray.filled(with: 0, times: 8)
         let num_results_out_storage = ByteArray.filled(with: 0, times: 8)
-        let (_error_out_storage, error_out_ptr) = allocate_error_output
+        let (_error_out_storage, error_out_ptr) = allocate_and_init_error
 
         let results_out_ptr = results_out_storage.pointer
         let num_results_out_ptr = num_results_out_storage.pointer
 
         write_usize(results_out_ptr, 0)
         write_usize(num_results_out_ptr, 0)
-        write_usize(error_out_ptr, 0)
 
         let result = tantivy_autocomplete(
           idx,
@@ -1392,14 +1369,13 @@ impl TantivyIndexManager {
 
         let results_out_storage = ByteArray.filled(with: 0, times: 8)
         let num_results_out_storage = ByteArray.filled(with: 0, times: 8)
-        let (_error_out_storage, error_out_ptr) = allocate_error_output
+        let (_error_out_storage, error_out_ptr) = allocate_and_init_error
 
         let results_out_ptr = results_out_storage.pointer
         let num_results_out_ptr = num_results_out_storage.pointer
 
         write_usize(results_out_ptr, 0)
         write_usize(num_results_out_ptr, 0)
-        write_usize(error_out_ptr, 0)
 
         let result = tantivy_did_you_mean(
           idx,
@@ -1464,9 +1440,7 @@ impl Drop for TantivyIndexManager {
   fn mut drop {
     match @index {
       case Some(idx) -> {
-        let (_error_out_storage, error_out_ptr) = allocate_error_output
-
-        write_usize(error_out_ptr, 0)
+        let (_error_out_storage, error_out_ptr) = allocate_and_init_error
 
         let result = tantivy_index_close(idx, error_out_ptr)
 
