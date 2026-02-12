@@ -142,64 +142,81 @@ fn pub create_field_array(
 }
 
 # Helper: Convert C pointer to String (reads until null terminator)
+# Optimized to avoid allocating full max_len buffer for small strings
 fn pub c_pointer_to_string(ptr: Pointer[UInt8], max_len: Int) -> String {
   if (ptr as Int) == 0 { return '' }
 
-  # Read bytes until null terminator
-  let bytes = ByteArray.filled(with: 0, times: max_len)
-  let mut i = 0
-  let mut reading = true
+  # First pass: count bytes until null terminator
+  let mut length = 0
+  let mut counting = true
 
-  while reading and (i < max_len) {
-    # Pointer arithmetic to get byte at offset i
-    let byte_ptr = (ptr as Int + i) as Pointer[UInt8]
+  while counting and (length < max_len) {
+    let byte_ptr = (ptr as Int + length) as Pointer[UInt8]
     let byte = byte_ptr.0
 
     if (byte as Int) == 0 {
-      reading = false
+      counting = false
     } else {
-      let _ = bytes.set(i, byte as Int)
-
-      i = i + 1
+      length = length + 1
     }
   }
 
-  # Convert bytes to string
+  # Second pass: allocate only the exact size needed
+  let bytes = ByteArray.filled(with: 0, times: length)
+  let mut i = 0
+
+  while i < length {
+    let byte_ptr = (ptr as Int + i) as Pointer[UInt8]
+    let byte = byte_ptr.0
+    let _ = bytes.set(i, byte as Int)
+
+    i = i + 1
+  }
+
+  # Convert bytes to string (only actual bytes, not full buffer)
   bytes.to_string
 }
 
 # Helper: Convert C pointer to String with truncation detection
 # Returns (string, was_truncated) tuple for detecting buffer overflow
+# Optimized to avoid allocating full max_len buffer for small strings
 fn pub c_pointer_to_string_checked(
   ptr: Pointer[UInt8],
   max_len: Int,
 ) -> (String, Bool) {
   if (ptr as Int) == 0 { return ('', false) }
 
-  # Read bytes until null terminator
-  let bytes = ByteArray.filled(with: 0, times: max_len)
-  let mut i = 0
-  let mut reading = true
-  let mut truncated = false
+  # First pass: count bytes until null terminator
+  let mut length = 0
+  let mut counting = true
 
-  while reading and (i < max_len) {
-    # Pointer arithmetic to get byte at offset i
-    let byte_ptr = (ptr as Int + i) as Pointer[UInt8]
+  while counting and (length < max_len) {
+    let byte_ptr = (ptr as Int + length) as Pointer[UInt8]
     let byte = byte_ptr.0
 
     if (byte as Int) == 0 {
-      reading = false
+      counting = false
     } else {
-      let _ = bytes.set(i, byte as Int)
-
-      i = i + 1
+      length = length + 1
     }
   }
 
   # Check if we hit the limit without finding null terminator
-  if reading and (i >= max_len) { truncated = true }
+  let truncated = counting and (length >= max_len)
 
-  # Convert bytes to string
+  # Second pass: allocate only the exact size needed
+  let bytes = ByteArray.filled(with: 0, times: length)
+  let mut i = 0
+
+  while i < length {
+    let byte_ptr = (ptr as Int + i) as Pointer[UInt8]
+    let byte = byte_ptr.0
+    let _ = bytes.set(i, byte as Int)
+
+    i = i + 1
+  }
+
+  # Convert bytes to string (only actual bytes, not full buffer)
   (bytes.to_string, truncated)
 }
 
