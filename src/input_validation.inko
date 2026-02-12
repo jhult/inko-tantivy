@@ -8,11 +8,51 @@ let pub MAX_DOC_ID_LENGTH = 1024
 # Maximum field name length
 let pub MAX_FIELD_NAME_LENGTH = 256
 
-# Maximum field value length (1MB)
-let pub MAX_FIELD_VALUE_LENGTH = 1_048_576
+# Maximum field value length (10MB)
+# Must match MAX_FIELD_VALUE_LENGTH in native/tantivy-c/src/lib.rs
+let pub MAX_FIELD_VALUE_LENGTH = 10_485_760
 
 # Maximum query string length
 let pub MAX_QUERY_LENGTH = 8192
+
+# Helper: Check if byte is a letter (a-z or A-Z)
+fn is_letter_byte(byte: Int) -> Bool {
+  ((byte >= 97 and byte <= 122) or (byte >= 65 and byte <= 90))
+}
+
+# Helper: Check if byte is a digit (0-9)
+fn is_digit_byte(byte: Int) -> Bool {
+  (byte >= 48 and byte <= 57)
+}
+
+# Helper: Validate field name format matches Rust regex: ^[a-zA-Z_][a-zA-Z0-9_]*$
+# Field names must:
+# 1. Start with a letter or underscore
+# 2. Contain only letters, numbers, and underscores
+# Note: Works with ASCII only, which is sufficient for field names
+fn pub is_valid_field_name_format(name: String) -> Bool {
+  if name.size == 0 { return false }
+
+  let bytes = name.to_byte_array
+  let first = bytes.get(0).or_panic
+
+  if !is_letter_byte(first) and first != 95 { return false }
+
+  let mut i = 1
+  while i < bytes.size {
+    match bytes.get(i) {
+      case Ok(byte) -> {
+        if !is_letter_byte(byte) and !is_digit_byte(byte) and byte != 95 {
+          return false
+        }
+      }
+      case Error(_) -> { return false }
+    }
+    i = i + 1
+  }
+
+  true
+}
 
 # Validate document ID
 fn pub validate_doc_id(doc_id: String) -> Result[String, String] {
@@ -26,8 +66,16 @@ fn pub validate_doc_id(doc_id: String) -> Result[String, String] {
 }
 
 # Validate field name
+# Matches Rust validation: must start with letter/underscore and contain only
+# letters, numbers, and underscores
 fn pub validate_field_name(name: String) -> Result[String, String] {
   if name.size == 0 { return Result.Error('Field name cannot be empty') }
+
+  if !is_valid_field_name_format(name) {
+    return Result.Error(
+      'Invalid field name \'${name}\': must start with a letter or underscore and contain only letters, numbers, and underscores',
+    )
+  }
 
   if name.size > MAX_FIELD_NAME_LENGTH {
     return Result.Error('Field name exceeds maximum length')
@@ -39,7 +87,9 @@ fn pub validate_field_name(name: String) -> Result[String, String] {
 # Validate field value
 fn pub validate_field_value(value: String) -> Result[String, String] {
   if value.size > MAX_FIELD_VALUE_LENGTH {
-    return Result.Error('Field value exceeds maximum length')
+    return Result.Error(
+      'Field value too large: ${value.size} bytes exceeds maximum of ${MAX_FIELD_VALUE_LENGTH} bytes',
+    )
   }
 
   Result.Ok(value)
