@@ -47,6 +47,9 @@ pub struct TantivyIndexWrapper {
     body_field: Option<Field>,
     // For custom schemas, store all default search fields
     default_search_fields: Vec<Field>,
+    // Cache QueryParser to avoid recreation on every search operation
+    // Safe to cache since schema is immutable after index creation
+    query_parser: QueryParser,
 }
 
 impl TantivyIndexWrapper {
@@ -726,6 +729,22 @@ pub unsafe extern "C" fn tantivy_index_open(
         }
     }
 
+    // Cache QueryParser to avoid recreation on every search operation
+    // Safe to cache since schema is immutable after index creation
+    let query_parser = if !default_search_fields.is_empty() {
+        QueryParser::for_index(&index, default_search_fields.clone())
+    } else {
+        // Fallback to subject/body fields for email schema
+        let mut fields = Vec::new();
+        if let Some(subject) = subject_field {
+            fields.push(subject);
+        }
+        if let Some(body) = body_field {
+            fields.push(body);
+        }
+        QueryParser::for_index(&index, fields)
+    };
+
     let wrapper = TantivyIndexWrapper {
         index,
         reader,
@@ -734,6 +753,7 @@ pub unsafe extern "C" fn tantivy_index_open(
         subject_field,
         body_field,
         default_search_fields,
+        query_parser,
     };
 
     Box::into_raw(Box::new(wrapper))
@@ -1260,7 +1280,8 @@ pub unsafe extern "C" fn tantivy_index_search(
         return -1;
     }
 
-    let query_parser = QueryParser::for_index(&wrapper.index, default_fields);
+    // Use cached QueryParser to avoid recreation on every search
+    let query_parser = &wrapper.query_parser;
 
     // Use lenient parsing to support field-specific searches on non-default fields
     // (e.g., from:email@example.com, to:recipient@example.com)
@@ -1739,7 +1760,8 @@ pub unsafe extern "C" fn tantivy_aggregate_terms(
         return -1;
     }
 
-    let query_parser = QueryParser::for_index(&wrapper.index, default_fields);
+    // Use cached QueryParser to avoid recreation on every aggregation
+    let query_parser = &wrapper.query_parser;
     let (parsed_query, _errors) = query_parser.parse_query_lenient(&query_str);
 
     let searcher = wrapper.reader.searcher();
