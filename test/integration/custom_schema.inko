@@ -1,0 +1,419 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+#
+# Custom schema integration tests
+
+import helpers (cleanup_test_index, ffi_available, temp_index_path)
+import std.test (Tests)
+import tantivy.index_manager (TantivyConfig, TantivyIndexManager)
+
+fn pub tests(t: mut Tests) {
+  if !ffi_available { return }
+
+  t.test('Create index with custom text schema', fn (t) {
+    let path = temp_index_path('custom-schema-001')
+    let schema_json = '{
+      "fields": [
+        {"name": "title", "type": "text", "indexed": true, "stored": true},
+        {"name": "content", "type": "text", "indexed": true, "stored": true}
+      ],
+      "default_search_fields": ["title", "content"]
+    }'
+
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> {
+        cleanup_test_index(path)
+        t.true(false)
+        return
+      }
+    }
+
+    let config_with_schema = match config.with_schema_json(schema_json) {
+      case Ok(c) -> c
+      case Error(_) -> {
+        cleanup_test_index(path)
+        t.true(false)
+        return
+      }
+    }
+
+    let mut manager = TantivyIndexManager.new(config_with_schema)
+
+    match manager.open {
+      case Ok(_) -> {
+        let fields = [
+          ('title', 'Test Title'),
+          ('content', 'Test Content'),
+        ]
+
+        match manager.add_doc('doc-1', fields) {
+          case Ok(_) -> t.true(true)
+          case Error(_) -> t.true(false)
+        }
+      }
+      case Error(_) -> t.true(false)
+    }
+
+    let _ = manager.close
+    cleanup_test_index(path)
+  })
+
+  t.test('Search with custom text schema', fn (t) {
+    let path = temp_index_path('custom-schema-002')
+    let schema_json = '{
+      "fields": [
+        {"name": "title", "type": "text", "indexed": true, "stored": true},
+        {"name": "content", "type": "text", "indexed": true, "stored": true}
+      ],
+      "default_search_fields": ["title", "content"]
+    }'
+
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> {
+        cleanup_test_index(path)
+        t.true(false)
+        return
+      }
+    }
+
+    let config_with_schema = match config.with_schema_json(schema_json) {
+      case Ok(c) -> c
+      case Error(_) -> {
+        cleanup_test_index(path)
+        t.true(false)
+        return
+      }
+    }
+
+    let mut manager = TantivyIndexManager.new(config_with_schema)
+
+    match manager.open {
+      case Ok(_) -> {
+        let fields = [
+          ('title', 'Introduction to Search'),
+          ('content', 'Full-text search is powerful'),
+        ]
+
+        let _ = manager.add_doc('doc-1', fields)
+        let _ = manager.commit
+
+        match manager.search('search', 10, 0) {
+          case Ok(results) -> {
+            if results.size > 0 {
+              t.true(true)
+            } else {
+              t.true(false)
+            }
+          }
+          case Error(_) -> t.true(false)
+        }
+      }
+      case Error(_) -> t.true(false)
+    }
+
+    let _ = manager.close
+    cleanup_test_index(path)
+  })
+
+  t.test('E-commerce schema with multiple field types', fn (t) {
+    let path = temp_index_path('custom-schema-003')
+    let schema_json = '{
+      "fields": [
+        {"name": "name", "type": "text", "indexed": true, "stored": true},
+        {"name": "description", "type": "text", "indexed": true, "stored": true},
+        {"name": "price", "type": "f64", "indexed": true, "stored": true},
+        {"name": "category", "type": "string", "indexed": true, "stored": true},
+        {"name": "in_stock", "type": "bool", "indexed": true, "stored": true},
+        {"name": "sku", "type": "string", "indexed": true, "stored": true}
+      ],
+      "default_search_fields": ["name", "description"]
+    }'
+
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> {
+        cleanup_test_index(path)
+        t.true(false)
+        return
+      }
+    }
+
+    let config_with_schema = match config.with_schema_json(schema_json) {
+      case Ok(c) -> c
+      case Error(_) -> {
+        cleanup_test_index(path)
+        t.true(false)
+        return
+      }
+    }
+
+    let mut manager = TantivyIndexManager.new(config_with_schema)
+
+    match manager.open {
+      case Ok(_) -> {
+        let fields = [
+          ('name', 'Laptop'),
+          ('description', 'High-performance laptop for developers'),
+          ('price', '1299.99'),
+          ('category', 'Electronics'),
+          ('in_stock', 'true'),
+          ('sku', 'LAP-001'),
+        ]
+
+        match manager.add_doc('product-1', fields) {
+          case Ok(_) -> {
+            match manager.commit {
+              case Ok(_) -> t.true(true)
+              case Error(_) -> t.true(false)
+            }
+          }
+          case Error(_) -> t.true(false)
+        }
+      }
+      case Error(_) -> t.true(false)
+    }
+
+    let _ = manager.close
+    cleanup_test_index(path)
+  })
+
+  t.test('Log search schema with u64 fields', fn (t) {
+    let path = temp_index_path('custom-schema-004')
+    let schema_json = '{
+      "fields": [
+        {"name": "timestamp", "type": "u64", "indexed": true, "stored": true},
+        {"name": "level", "type": "string", "indexed": true, "stored": true},
+        {"name": "message", "type": "text", "indexed": true, "stored": true}
+      ],
+      "default_search_fields": ["message"]
+    }'
+
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> {
+        cleanup_test_index(path)
+        t.true(false)
+        return
+      }
+    }
+
+    let config_with_schema = match config.with_schema_json(schema_json) {
+      case Ok(c) -> c
+      case Error(_) -> {
+        cleanup_test_index(path)
+        t.true(false)
+        return
+      }
+    }
+
+    let mut manager = TantivyIndexManager.new(config_with_schema)
+
+    match manager.open {
+      case Ok(_) -> {
+        let fields = [
+          ('timestamp', '1704067200'),
+          ('level', 'INFO'),
+          ('message', 'Application started successfully'),
+        ]
+
+        match manager.add_doc('log-1', fields) {
+          case Ok(_) -> t.true(true)
+          case Error(_) -> t.true(false)
+        }
+      }
+      case Error(_) -> t.true(false)
+    }
+
+    let _ = manager.close
+    cleanup_test_index(path)
+  })
+
+  t.test('Schema with i64 integer fields', fn (t) {
+    let path = temp_index_path('custom-schema-005')
+    let schema_json = '{
+      "fields": [
+        {"name": "id", "type": "i64", "indexed": true, "stored": true},
+        {"name": "name", "type": "text", "indexed": true, "stored": true}
+      ],
+      "default_search_fields": ["name"]
+    }'
+
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> {
+        cleanup_test_index(path)
+        t.true(false)
+        return
+      }
+    }
+
+    let config_with_schema = match config.with_schema_json(schema_json) {
+      case Ok(c) -> c
+      case Error(_) -> {
+        cleanup_test_index(path)
+        t.true(false)
+        return
+      }
+    }
+
+    let mut manager = TantivyIndexManager.new(config_with_schema)
+
+    match manager.open {
+      case Ok(_) -> {
+        let fields = [
+          ('id', '-12345'),
+          ('name', 'Test Item'),
+        ]
+
+        match manager.add_doc('item-1', fields) {
+          case Ok(_) -> t.true(true)
+          case Error(_) -> t.true(false)
+        }
+      }
+      case Error(_) -> t.true(false)
+    }
+
+    let _ = manager.close
+    cleanup_test_index(path)
+  })
+
+  t.test('Schema validation rejects invalid JSON', fn (t) {
+    let path = temp_index_path('custom-schema-006')
+    let schema_json = '{invalid json'
+
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> {
+        cleanup_test_index(path)
+        t.true(false)
+        return
+      }
+    }
+
+    match config.with_schema_json(schema_json) {
+      case Ok(_) -> t.true(false)
+      case Error(_) -> t.true(true)
+    }
+
+    cleanup_test_index(path)
+  })
+
+  t.test('Multi-field search with custom schema', fn (t) {
+    let path = temp_index_path('custom-schema-007')
+    let schema_json = '{
+      "fields": [
+        {"name": "title", "type": "text", "indexed": true, "stored": true},
+        {"name": "author", "type": "string", "indexed": true, "stored": true},
+        {"name": "content", "type": "text", "indexed": true, "stored": true}
+      ],
+      "default_search_fields": ["title", "content"]
+    }'
+
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> {
+        cleanup_test_index(path)
+        t.true(false)
+        return
+      }
+    }
+
+    let config_with_schema = match config.with_schema_json(schema_json) {
+      case Ok(c) -> c
+      case Error(_) -> {
+        cleanup_test_index(path)
+        t.true(false)
+        return
+      }
+    }
+
+    let mut manager = TantivyIndexManager.new(config_with_schema)
+
+    match manager.open {
+      case Ok(_) -> {
+        let fields1 = [
+          ('title', 'Search Engines'),
+          ('author', 'John Doe'),
+          ('content', 'Introduction to search technology'),
+        ]
+
+        let fields2 = [
+          ('title', 'Database Systems'),
+          ('author', 'Jane Smith'),
+          ('content', 'Fundamentals of database management'),
+        ]
+
+        let _ = manager.add_doc('doc-1', fields1)
+        let _ = manager.add_doc('doc-2', fields2)
+        let _ = manager.commit
+
+        match manager.search('search', 10, 0) {
+          case Ok(results) -> {
+            if results.size > 0 {
+              t.true(true)
+            } else {
+              t.true(false)
+            }
+          }
+          case Error(_) -> t.true(false)
+        }
+      }
+      case Error(_) -> t.true(false)
+    }
+
+    let _ = manager.close
+    cleanup_test_index(path)
+  })
+
+  t.test('String field for exact match', fn (t) {
+    let path = temp_index_path('custom-schema-008')
+    let schema_json = '{
+      "fields": [
+        {"name": "id", "type": "string", "indexed": true, "stored": true},
+        {"name": "title", "type": "text", "indexed": true, "stored": true}
+      ],
+      "default_search_fields": ["title"]
+    }'
+
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> {
+        cleanup_test_index(path)
+        t.true(false)
+        return
+      }
+    }
+
+    let config_with_schema = match config.with_schema_json(schema_json) {
+      case Ok(c) -> c
+      case Error(_) -> {
+        cleanup_test_index(path)
+        t.true(false)
+        return
+      }
+    }
+
+    let mut manager = TantivyIndexManager.new(config_with_schema)
+
+    match manager.open {
+      case Ok(_) -> {
+        let fields = [
+          ('id', 'EXACT-ID-123'),
+          ('title', 'Test Document'),
+        ]
+
+        match manager.add_doc('doc-1', fields) {
+          case Ok(_) -> t.true(true)
+          case Error(_) -> t.true(false)
+        }
+      }
+      case Error(_) -> t.true(false)
+    }
+
+    let _ = manager.close
+    cleanup_test_index(path)
+  })
+}

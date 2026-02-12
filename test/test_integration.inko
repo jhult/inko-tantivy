@@ -16,6 +16,7 @@ import integration.persistence
 import integration.search_operations
 import integration.validation
 import integration.error_paths
+import integration.custom_schema
 import std.test (Tests)
 import tantivy.index_manager (TantivyConfig)
 
@@ -66,4 +67,7 @@ fn pub tests(t: mut Tests) {
 
   # Error paths
   error_paths.tests(t)
+
+  # Custom schema
+  custom_schema.tests(t)
 }
