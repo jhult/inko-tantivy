@@ -27,7 +27,7 @@ type pub MemoryTracker {
 }
 
 fn sort_tuple_by_second_desc(
-  mut data: Array[(String, Int)],
+  data: Array[(String, Int)],
 ) -> Array[(String, Int)] {
   let mut i = 0
 
@@ -200,102 +200,6 @@ impl MemoryTracker {
           '    ${ty}: ${format_bytes(bytes_val)} (${percentage}%)',
         )
       }
-    }
-  }
-}
-            }
-            case Error(_) -> {}
-          }
-
-          j = j + 1
-        }
-
-        let temp = sorted.get(i).or_panic
-        let temp_val = sorted.get(max_j).or_panic
-        let temp_clone = (temp.0.clone, temp.1)
-        let temp_val_clone = (temp_val.0.clone, temp_val.1)
-
-        sorted.set(i, temp_val_clone)
-        sorted.set(max_j, temp_clone)
-
-        i = i + 1
-      }
-
-      for (ty, count) in sorted.iter {
-        let percentage = (count * 100) / @allocations
-
-        let _ = Stdout.new.print('    ${ty}: ${count} (${percentage}%)')
-      }
-
-      let _ = Stdout.new.print('')
-
-      let _ = Stdout.new.print('Bytes allocated by type:')
-
-      sorted = @bytes_by_type.clone
-      i = 0
-
-      while i < sorted.size {
-        let mut max_j = i
-        let mut j = i + 1
-
-        while j < sorted.size {
-          match sorted.get(j) {
-            case Ok((_, bytes_j)) -> {
-              match sorted.get(max_j) {
-                case Ok((_, bytes_max)) -> if bytes_j > bytes_max { max_j = j }
-                case Error(_) -> {}
-              }
-            }
-            case Error(_) -> {}
-          }
-
-          j = j + 1
-        }
-
-        let temp = sorted.get(i).or_panic
-        let temp_val = sorted.get(max_j).or_panic
-        let temp_clone = (temp.0.clone, temp.1)
-        let temp_val_clone = (temp_val.0.clone, temp_val.1)
-
-        sorted.set(i, temp_val_clone)
-        sorted.set(max_j, temp_clone)
-
-        i = i + 1
-      }
-
-      for (ty, bytes_val) in sorted.iter {
-        let percentage = (bytes_val * 100) / @bytes_allocated
-
-        let _ = Stdout.new.print(
-          '    ${ty}: ${format_bytes(bytes_val)} (${percentage}%)',
-        )
-      }
-
-      let _ = Stdout.new.print('')
-    }
-
-    if @allocations > 0 {
-      let avg_bytes = @bytes_allocated / @allocations
-
-      let _ = Stdout.new.print(
-        '  Average allocation size: ${format_bytes(avg_bytes)}',
-      )
-    }
-
-    let _ = Stdout.new.print('')
-  }
-
-  fn pub allocation_rate(duration_ns: Int) -> Float {
-    if duration_ns == 0 { return 0.0 }
-
-    @allocations as Float / (duration_ns as Float / 1_000_000_000.0)
-  }
-
-  fn pub print_rate(duration_ns: Int) {
-    if duration_ns > 0 {
-      let _ = Stdout.new.print(
-        '  Allocation rate: ${allocation_rate(duration_ns).to_int} allocations/sec',
-      )
     }
   }
 }
