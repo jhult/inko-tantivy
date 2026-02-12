@@ -1,0 +1,216 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+# Tantivy index lifecycle management
+#
+# This module handles index lifecycle operations: opening, closing, committing,
+# and rolling back the Tantivy index.
+
+import input_validation
+import pointer_helpers (is_null)
+import tantivy.ffi (
+  CONFIG_OFFSET_READER_MEMORY,
+  CONFIG_OFFSET_SCHEMA_JSON,
+  CONFIG_OFFSET_THREADS,
+  CONFIG_OFFSET_WRITER_MEMORY,
+  CONFIG_SIZE,
+  tantivy_index_close,
+  tantivy_index_commit,
+  tantivy_index_open,
+  tantivy_index_rollback,
+)
+import tantivy.marshal (
+  allocate_and_init_error,
+  check_ffi_error,
+)
+import tantivy.index_manager (TantivyConfig)
+import pointer_helpers (pointer_offset, write_usize)
+
+# Helper: Convert TantivyConfig to C struct for FFI
+fn config_to_c_struct(config: ref TantivyConfig) -> (ByteArray, Array[ByteArray]) {
+  let buf = ByteArray.filled(with: 0, times: CONFIG_SIZE)
+  let mut buffers = []
+
+  write_usize(pointer_offset(buf.pointer, 0), config.index_path.pointer as Int)
+
+  write_usize(
+    pointer_offset(buf.pointer, CONFIG_OFFSET_READER_MEMORY),
+    config.reader_memory_budget_bytes as Int,
+  )
+
+  write_usize(
+    pointer_offset(buf.pointer, CONFIG_OFFSET_WRITER_MEMORY),
+    config.writer_memory_budget_bytes as Int,
+  )
+
+  write_usize(
+    pointer_offset(buf.pointer, CONFIG_OFFSET_THREADS),
+    config.num_threads as Int,
+  )
+
+  match config.schema_json {
+    case Some(schema_json) -> {
+      buffers.push(schema_json)
+      write_usize(
+        pointer_offset(buf.pointer, CONFIG_OFFSET_SCHEMA_JSON),
+        schema_json.pointer as Int,
+      )
+    }
+    case None -> {
+      write_usize(pointer_offset(buf.pointer, CONFIG_OFFSET_SCHEMA_JSON), 0)
+    }
+  }
+
+  (buf, buffers)
+}
+
+# Index lifecycle manager
+type pub TantivyIndexLifecycle {
+  let mut @config: TantivyConfig
+  let mut @index: Option[Pointer[UInt8]]
+}
+
+impl TantivyIndexLifecycle {
+  fn pub static new(config: TantivyConfig) -> Self {
+    Self(config: config, index: Option.None)
+  }
+
+  # Open or create Tantivy index
+  fn pub mut open -> Result[Bool, String] {
+    let (c_config, _buffers) = config_to_c_struct(@config)
+
+    let (_error_out_storage, error_out_ptr) = allocate_and_init_error
+
+    let index_ptr = tantivy_index_open(c_config.pointer, error_out_ptr)
+
+    if is_null(index_ptr) {
+      match check_ffi_error(error_out_ptr) {
+        case Error(e) -> return Result.Error(e)
+        case Ok(_) -> {
+          return Result.Error(
+            'Failed to open Tantivy index at path: ${@config.index_path}. '
+              + 'Possible causes: 1) Path does not exist, 2) Insufficient permissions, '
+              + '3) Path is not a valid directory, 4) Index is corrupted. '
+              + 'Suggestions: Check path exists, verify read/write permissions, '
+              + 'or recreate the index.',
+          )
+        }
+      }
+    } else {
+      @index = Option.Some(index_ptr)
+      Result.Ok(true)
+    }
+  }
+
+  # Close Tantivy index
+  #
+  # It is recommended to call close() explicitly before the lifecycle
+  # is dropped to ensure any errors are properly handled. If close()
+  # is not called, Drop will attempt to close the index, but errors
+  # will only be logged to stderr.
+  fn pub mut close -> Result[Bool, String] {
+    match @index {
+      case Some(idx) -> {
+        let (_error_out_storage, error_out_ptr) = allocate_and_init_error
+
+        let result = tantivy_index_close(idx, error_out_ptr)
+
+        @index = Option.None
+
+        match check_ffi_error(error_out_ptr) {
+          case Error(e) -> Result.Error(e)
+          case Ok(_) -> {
+            if (result as Int) == 0 {
+              Result.Ok(true)
+            } else {
+              Result.Error(
+                'Failed to close Tantivy index at path: ${@config.index_path}. '
+                  + 'This may indicate a resource leak or data corruption. '
+                  + 'The index may have been corrupted during the last operation. '
+                  + 'Action: Check for disk space issues or I/O errors.',
+              )
+            }
+          }
+        }
+      }
+      case None -> Result.Ok(true)
+    }
+  }
+
+  # Check if index is open
+  fn pub is_open -> Bool {
+    match @index {
+      case Some(_) -> true
+      case None -> false
+    }
+  }
+
+  # Commit pending changes to the index
+  fn pub mut commit -> Result[Bool, String] {
+    match @index {
+      case Some(idx) -> {
+        let (_error_out_storage, error_out_ptr) = allocate_and_init_error
+
+        let result = tantivy_index_commit(idx, error_out_ptr)
+
+        match check_ffi_error(error_out_ptr) {
+          case Error(e) -> return Result.Error(e)
+          case Ok(_) -> {}
+        }
+
+        if (result as Int) == 0 {
+          Result.Ok(true)
+        } else {
+          Result.Error(
+            'Failed to commit changes to Tantivy index. '
+              + 'Possible causes: 1) Disk is full, 2) I/O error, 3) Index corruption, '
+              + '4) Insufficient memory. '
+              + 'Suggestions: Check disk space, verify I/O permissions, '
+              + 'or consider rolling back the last operation.',
+          )
+        }
+      }
+      case None -> Result.Error('Index is not open')
+    }
+  }
+
+  # Rollback pending changes
+  fn pub mut rollback -> Result[Bool, String] {
+    match @index {
+      case Some(idx) -> {
+        let (_error_out_storage, error_out_ptr) = allocate_and_init_error
+
+        let result = tantivy_index_rollback(idx, error_out_ptr)
+
+        match check_ffi_error(error_out_ptr) {
+          case Error(e) -> return Result.Error(e)
+          case Ok(_) -> {}
+        }
+
+        if (result as Int) == 0 {
+          Result.Ok(true)
+        } else {
+          Result.Error(
+            'Failed to rollback changes in Tantivy index. '
+              + 'Possible causes: 1) Index is in inconsistent state, 2) I/O error, '
+              + '3) No pending changes to rollback. '
+              + 'Suggestions: Verify index state, check I/O permissions, '
+              + 'or reopen the index if needed.',
+          )
+        }
+      }
+      case None -> Result.Error('Index is not open')
+    }
+  }
+
+  # Get the raw index pointer for FFI operations
+  fn pub mut index_ptr -> Option[Pointer[UInt8]] {
+    @index
+  }
+
+  # Get the index config
+  fn pub config -> ref TantivyConfig {
+    @config
+  }
+}

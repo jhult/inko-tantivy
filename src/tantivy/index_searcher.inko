@@ -1,0 +1,604 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+# Tantivy index searcher operations
+#
+# This module handles search and retrieval operations: searching for documents,
+# getting documents by ID, term aggregation, autocomplete, and suggestions.
+
+import input_validation (
+  validate_distance, validate_field_name, validate_limit, validate_offset,
+  validate_query,
+)
+import tantivy.ffi (
+  AGGREGATION_OFFSET_COUNT,
+  AGGREGATION_OFFSET_KEY,
+  AGGREGATION_SIZE,
+  RESULT_OFFSET_DOC_ID,
+  RESULT_OFFSET_HIGHLIGHT,
+  RESULT_OFFSET_SCORE,
+  RESULT_SIZE,
+  SUGGESTION_OFFSET_SCORE,
+  SUGGESTION_OFFSET_TEXT,
+  SUGGESTION_SIZE,
+  tantivy_aggregate_terms,
+  tantivy_aggregation_results_free,
+  tantivy_autocomplete,
+  tantivy_did_you_mean,
+  tantivy_docs_array_free,
+  tantivy_index_get_doc,
+  tantivy_index_get_docs,
+  tantivy_index_search,
+  tantivy_result_free,
+  tantivy_suggestions_free,
+  tantivy_string_free,
+)
+import tantivy.marshal (
+  allocate_and_init_error,
+  c_array_element_ptr,
+  c_pointer_to_string_checked,
+  check_ffi_error,
+  read_optional_string_field,
+  read_string_field,
+  string_to_c_buffer,
+)
+import tantivy.index_lifecycle (TantivyIndexLifecycle)
+import pointer_helpers (pointer_offset, read_usize, write_usize)
+import std.bytes (ByteArray)
+
+# Tantivy search result
+type pub TantivyResult {
+  let pub @doc_id: String
+  let pub @score: Float
+  let pub @highlight: Option[String]
+}
+
+# Tantivy aggregation result
+type pub TantivyAggregationResult {
+  let pub @key: String
+  let pub @count: Int
+}
+
+# Tantivy suggestion result
+type pub TantivySuggestion {
+  let pub @text: String
+  let pub @score: Float
+}
+
+# Index searcher for read operations
+type pub TantivyIndexSearcher {
+  let mut @lifecycle: TantivyIndexLifecycle
+}
+
+impl TantivyIndexSearcher {
+  fn pub static new(lifecycle: TantivyIndexLifecycle) -> Self {
+    Self(lifecycle: lifecycle)
+  }
+
+  # Search the index for documents matching a query
+  fn pub mut search(
+    query: String,
+    limit: Int,
+    offset: Int,
+  ) -> Result[Array[TantivyResult], String] {
+    match validate_query(query) {
+      case Ok(_) -> {}
+      case Error(e) -> return Result.Error('Invalid query: ${e}')
+    }
+
+    match validate_limit(limit, 'search') {
+      case Ok(_) -> {}
+      case Error(e) -> return Result.Error('Invalid limit: ${e}')
+    }
+
+    match validate_offset(offset) {
+      case Ok(_) -> {}
+      case Error(e) -> return Result.Error('Invalid offset: ${e}')
+    }
+
+    match @lifecycle.index_ptr {
+      case Some(idx) -> {
+        let query_buf = string_to_c_buffer(query)
+
+        let results_out_storage = ByteArray.filled(with: 0, times: 8)
+        let num_results_out_storage = ByteArray.filled(with: 0, times: 8)
+        let error_out_storage = ByteArray.filled(with: 0, times: 8)
+
+        let results_out_ptr = results_out_storage.pointer
+        let num_results_out_ptr = num_results_out_storage.pointer
+        let error_out_ptr = error_out_storage.pointer
+
+        write_usize(results_out_ptr, 0)
+        write_usize(num_results_out_ptr, 0)
+        write_usize(error_out_ptr, 0)
+
+        let result = tantivy_index_search(
+          idx,
+          query_buf.pointer,
+          limit as Int64,
+          offset as Int64,
+          results_out_ptr as Pointer[UInt8],
+          num_results_out_ptr as Pointer[UInt64],
+          error_out_ptr as Pointer[UInt8],
+        )
+
+        match check_ffi_error(error_out_ptr) {
+          case Error(e) -> return Result.Error(e)
+          case Ok(_) -> {}
+        }
+
+        if (result as Int) != 0 {
+          return Result.Error(
+            'Search failed for query: "${query}" (limit: ${limit}, offset: ${offset}). '
+              + 'Possible causes: 1) Invalid query syntax, 2) Index not yet committed, '
+              + '3) Invalid limit/offset values, 4) Field name not in schema. '
+              + 'Suggestions: Check query syntax, verify index is committed, '
+              + 'or reduce limit/offset values.',
+          )
+        }
+
+        let results_ptr_addr = read_usize(results_out_ptr)
+        let num_results = read_usize(num_results_out_ptr)
+
+        let mut results = []
+
+        if results_ptr_addr != 0 and num_results > 0 {
+          let results_ptr = results_ptr_addr as Pointer[UInt8]
+
+          let mut i = 0
+
+          while i < num_results {
+            let base_ptr = c_array_element_ptr(results_ptr, i, RESULT_SIZE)
+
+            let doc_id = read_string_field(
+              base_ptr,
+              RESULT_OFFSET_DOC_ID,
+              @lifecycle.config.string_buffer_size,
+            )
+            let score_ptr = pointer_offset(base_ptr, RESULT_OFFSET_SCORE)
+              as Pointer[Float32]
+            let score = score_ptr.0 as Float
+            let highlight = read_optional_string_field(
+              base_ptr,
+              RESULT_OFFSET_HIGHLIGHT,
+              @lifecycle.config.string_buffer_size,
+            )
+
+            results.push(
+              TantivyResult(doc_id: doc_id, score: score, highlight: highlight),
+            )
+
+            i = i + 1
+          }
+        }
+
+        if results_ptr_addr != 0 and num_results > 0 {
+          let results_ptr = results_ptr_addr as Pointer[UInt8]
+
+          tantivy_result_free(results_ptr, num_results as Int64)
+        }
+
+        Result.Ok(results)
+      }
+      case None -> Result.Error('Index is not open')
+    }
+  }
+
+  # Get a document by its ID
+  fn pub mut get_doc(doc_id: String) -> Result[String, String] {
+    match @lifecycle.index_ptr {
+      case Some(idx) -> {
+        let doc_id_buf = string_to_c_buffer(doc_id)
+
+        let (_error_out_storage, error_out_ptr) = allocate_and_init_error
+
+        let result_ptr = tantivy_index_get_doc(
+          idx,
+          doc_id_buf.pointer,
+          error_out_ptr,
+        )
+
+        match check_ffi_error(error_out_ptr) {
+          case Error(e) -> Result.Error(e)
+          case Ok(_) -> {
+            if (result_ptr as Int) == 0 {
+              Result.Error('Document not found with ID: "${doc_id}"')
+            } else {
+              let (json_str, truncated) = c_pointer_to_string_checked(
+                result_ptr,
+                @lifecycle.config.json_buffer_size,
+              )
+
+              tantivy_string_free(result_ptr)
+
+              if truncated {
+                Result.Error(
+                  'Document exceeds maximum size (${@lifecycle.config.json_buffer_size} bytes)',
+                )
+              } else {
+                Result.Ok(json_str)
+              }
+            }
+          }
+        }
+      }
+      case None -> Result.Error('Index is not open')
+    }
+  }
+
+  # Get multiple documents by their IDs
+  fn pub mut get_docs(doc_ids: Array[String]) -> Result[Array[String], String] {
+    match @lifecycle.index_ptr {
+      case Some(idx) -> {
+        if doc_ids.size == 0 { return Result.Ok([]) }
+
+        let num_ids = doc_ids.size
+        let ids_array_size = num_ids * 8
+        let ids_array_buf = ByteArray.filled(with: 0, times: ids_array_size)
+
+        let mut string_buffers = []
+
+        let mut i = 0
+        while i < num_ids {
+          let doc_id = doc_ids.get(i).or_panic
+          let doc_id_buf = string_to_c_buffer(doc_id)
+          string_buffers.push(doc_id_buf)
+          write_usize(pointer_offset(ids_array_buf.pointer, i), doc_id_buf.pointer as Int)
+          i = i + 1
+        }
+
+        let results_out_storage = ByteArray.filled(with: 0, times: 8)
+        let num_results_out_storage = ByteArray.filled(with: 0, times: 8)
+        let (_error_out_storage, error_out_ptr) = allocate_and_init_error
+
+        let results_out_ptr = results_out_storage.pointer
+        let num_results_out_ptr = num_results_out_storage.pointer
+
+        write_usize(results_out_ptr, 0)
+        write_usize(num_results_out_ptr, 0)
+
+        let result = tantivy_index_get_docs(
+          idx,
+          ids_array_buf.pointer,
+          num_ids as Int64,
+          results_out_ptr as Pointer[UInt8],
+          num_results_out_ptr as Pointer[UInt64],
+          error_out_ptr as Pointer[UInt8],
+        )
+
+        match check_ffi_error(error_out_ptr) {
+          case Error(e) -> return Result.Error(e)
+          case Ok(_) -> {}
+        }
+
+        if (result as Int) != 0 {
+          return Result.Error(
+            'Failed to get multiple documents. '
+              + 'Possible causes: 1) Invalid document IDs, 2) Index is locked, '
+              + '3) Insufficient permissions. '
+              + 'Suggestions: Verify document IDs exist, check if index is being modified, '
+              + 'or verify read permissions.',
+          )
+        }
+
+        let results_ptr_addr = read_usize(results_out_ptr)
+        let num_results = read_usize(num_results_out_ptr)
+
+        let mut docs = []
+
+        if results_ptr_addr != 0 and num_results > 0 {
+          let results_ptr = results_ptr_addr as Pointer[UInt8]
+
+          let mut j = 0
+          while j < num_results {
+            let doc_ptr = c_array_element_ptr(results_ptr, j, 8)
+            let doc_string_ptr_addr = read_usize(doc_ptr)
+
+            if doc_string_ptr_addr != 0 {
+              let doc_string_ptr = doc_string_ptr_addr as Pointer[UInt8]
+
+              let (json_str, _truncated) = c_pointer_to_string_checked(
+                doc_string_ptr,
+                @lifecycle.config.json_buffer_size,
+              )
+
+              docs.push(json_str)
+            } else {
+              docs.push('')
+            }
+
+            j = j + 1
+          }
+
+          tantivy_docs_array_free(results_ptr, num_results as Int64)
+        }
+
+        Result.Ok(docs)
+      }
+      case None -> Result.Error('Index is not open')
+    }
+  }
+
+  # Aggregate terms for a field
+  fn pub mut aggregate_terms(
+    field_name: String,
+    query: String,
+    limit: Int,
+  ) -> Result[Array[TantivyAggregationResult], String] {
+    match @lifecycle.index_ptr {
+      case Some(idx) -> {
+        let field_buf = string_to_c_buffer(field_name)
+        let query_buf = string_to_c_buffer(query)
+
+        let results_out_storage = ByteArray.filled(with: 0, times: 8)
+        let num_results_out_storage = ByteArray.filled(with: 0, times: 8)
+        let (_error_out_storage, error_out_ptr) = allocate_and_init_error
+
+        let results_out_ptr = results_out_storage.pointer
+        let num_results_out_ptr = num_results_out_storage.pointer
+
+        write_usize(results_out_ptr, 0)
+        write_usize(num_results_out_ptr, 0)
+
+        let result = tantivy_aggregate_terms(
+          idx,
+          field_buf.pointer,
+          query_buf.pointer,
+          limit as Int64,
+          results_out_ptr as Pointer[UInt8],
+          num_results_out_ptr as Pointer[UInt64],
+          error_out_ptr as Pointer[UInt8],
+        )
+
+        match check_ffi_error(error_out_ptr) {
+          case Error(e) -> return Result.Error(e)
+          case Ok(_) -> {}
+        }
+
+        if (result as Int) != 0 {
+          return Result.Error(
+            'Term aggregation failed for field: "${field_name}" with query: "${query}"',
+          )
+        }
+
+        let results_ptr_addr = read_usize(results_out_ptr)
+        let num_results = read_usize(num_results_out_ptr)
+
+        let mut results = []
+
+        if results_ptr_addr != 0 and num_results > 0 {
+          let results_ptr = results_ptr_addr as Pointer[UInt8]
+
+          let mut j = 0
+
+          while j < num_results {
+            let base_ptr = c_array_element_ptr(results_ptr, j, AGGREGATION_SIZE)
+
+            let key = read_string_field(
+              base_ptr,
+              AGGREGATION_OFFSET_KEY,
+              @lifecycle.config.string_buffer_size,
+            )
+            let count_ptr = pointer_offset(base_ptr, AGGREGATION_OFFSET_COUNT)
+              as Pointer[UInt64]
+            let count = count_ptr.0 as Int
+
+            results.push(TantivyAggregationResult(key: key, count: count))
+
+            j = j + 1
+          }
+
+          tantivy_aggregation_results_free(results_ptr, num_results as Int64)
+        }
+
+        Result.Ok(results)
+      }
+      case None -> Result.Error('Index is not open')
+    }
+  }
+
+  # Get facet counts for a field (uses default limit of 1000)
+  fn pub mut get_facet_counts(
+    field_name: String,
+    query: String,
+  ) -> Result[Array[TantivyAggregationResult], String] {
+    self.aggregate_terms(field_name, query, 1000)
+  }
+
+  # Autocomplete: Get suggestions for a prefix query
+  fn pub mut autocomplete(
+    field: String,
+    prefix: String,
+    limit: Int,
+  ) -> Result[Array[TantivySuggestion], String] {
+    match validate_field_name(field) {
+      case Ok(_) -> {}
+      case Error(e) -> return Result.Error('Invalid field name: ${e}')
+    }
+
+    match validate_query(prefix) {
+      case Ok(_) -> {}
+      case Error(e) -> return Result.Error('Invalid prefix: ${e}')
+    }
+
+    match validate_limit(limit, 'autocomplete') {
+      case Ok(_) -> {}
+      case Error(e) -> return Result.Error('Invalid limit: ${e}')
+    }
+
+    match @lifecycle.index_ptr {
+      case Some(idx) -> {
+        let field_buf = string_to_c_buffer(field)
+        let prefix_buf = string_to_c_buffer(prefix)
+
+        let results_out_storage = ByteArray.filled(with: 0, times: 8)
+        let num_results_out_storage = ByteArray.filled(with: 0, times: 8)
+        let (_error_out_storage, error_out_ptr) = allocate_and_init_error
+
+        let results_out_ptr = results_out_storage.pointer
+        let num_results_out_ptr = num_results_out_storage.pointer
+
+        write_usize(results_out_ptr, 0)
+        write_usize(num_results_out_ptr, 0)
+
+        let result = tantivy_autocomplete(
+          idx,
+          field_buf.pointer,
+          prefix_buf.pointer,
+          limit as Int64,
+          results_out_ptr as Pointer[UInt8],
+          num_results_out_ptr as Pointer[UInt64],
+          error_out_ptr as Pointer[UInt8],
+        )
+
+        match check_ffi_error(error_out_ptr) {
+          case Error(e) -> return Result.Error(e)
+          case Ok(_) -> {}
+        }
+
+        if (result as Int) != 0 {
+          return Result.Error(
+            'Autocomplete failed for field: "${field}", prefix: "${prefix}" (no error details available)',
+          )
+        }
+
+        let results_ptr_addr = read_usize(results_out_ptr)
+        let num_results = read_usize(num_results_out_ptr)
+
+        let mut results = []
+
+        if results_ptr_addr != 0 and num_results > 0 {
+          let results_ptr = results_ptr_addr as Pointer[UInt8]
+
+          let mut j = 0
+          while j < num_results {
+            let base_ptr = c_array_element_ptr(results_ptr, j, SUGGESTION_SIZE)
+
+            let text = read_string_field(
+              base_ptr,
+              SUGGESTION_OFFSET_TEXT,
+              @lifecycle.config.string_buffer_size,
+            )
+            let score_ptr = pointer_offset(base_ptr, SUGGESTION_OFFSET_SCORE)
+              as Pointer[Float32]
+            let score = score_ptr.0 as Float
+
+            results.push(TantivySuggestion(text: text, score: score))
+
+            j = j + 1
+          }
+
+          tantivy_suggestions_free(results_ptr, num_results as Int64)
+        }
+
+        Result.Ok(results)
+      }
+      case None -> Result.Error('Index is not open')
+    }
+  }
+
+  # Did-you-mean: Get similar terms using fuzzy query
+  fn pub mut did_you_mean(
+    field: String,
+    term: String,
+    distance: Int,
+    limit: Int,
+  ) -> Result[Array[TantivySuggestion], String] {
+    match validate_field_name(field) {
+      case Ok(_) -> {}
+      case Error(e) -> return Result.Error('Invalid field name: ${e}')
+    }
+
+    match validate_query(term) {
+      case Ok(_) -> {}
+      case Error(e) -> return Result.Error('Invalid term: ${e}')
+    }
+
+    match validate_distance(distance) {
+      case Ok(_) -> {}
+      case Error(e) -> return Result.Error('Invalid distance: ${e}')
+    }
+
+    match validate_limit(limit, 'did_you_mean') {
+      case Ok(_) -> {}
+      case Error(e) -> return Result.Error('Invalid limit: ${e}')
+    }
+
+    match @lifecycle.index_ptr {
+      case Some(idx) -> {
+        let field_buf = string_to_c_buffer(field)
+        let term_buf = string_to_c_buffer(term)
+
+        let results_out_storage = ByteArray.filled(with: 0, times: 8)
+        let num_results_out_storage = ByteArray.filled(with: 0, times: 8)
+        let (_error_out_storage, error_out_ptr) = allocate_and_init_error
+
+        let results_out_ptr = results_out_storage.pointer
+        let num_results_out_ptr = num_results_out_storage.pointer
+
+        write_usize(results_out_ptr, 0)
+        write_usize(num_results_out_ptr, 0)
+
+        let result = tantivy_did_you_mean(
+          idx,
+          field_buf.pointer,
+          term_buf.pointer,
+          distance as Int32,
+          limit as Int64,
+          results_out_ptr as Pointer[UInt8],
+          num_results_out_ptr as Pointer[UInt64],
+          error_out_ptr as Pointer[UInt8],
+        )
+
+        match check_ffi_error(error_out_ptr) {
+          case Error(e) -> return Result.Error(e)
+          case Ok(_) -> {}
+        }
+
+        if (result as Int) != 0 {
+          return Result.Error(
+            'Did-you-mean failed for field: "${field}", term: "${term}" (no error details available)',
+          )
+        }
+
+        let results_ptr_addr = read_usize(results_out_ptr)
+        let num_results = read_usize(num_results_out_ptr)
+
+        let mut results = []
+
+        if results_ptr_addr != 0 and num_results > 0 {
+          let results_ptr = results_ptr_addr as Pointer[UInt8]
+
+          let mut j = 0
+          while j < num_results {
+            let base_ptr = c_array_element_ptr(results_ptr, j, SUGGESTION_SIZE)
+
+            let text = read_string_field(
+              base_ptr,
+              SUGGESTION_OFFSET_TEXT,
+              @lifecycle.config.string_buffer_size,
+            )
+            let score_ptr = pointer_offset(base_ptr, SUGGESTION_OFFSET_SCORE)
+              as Pointer[Float32]
+            let score = score_ptr.0 as Float
+
+            results.push(TantivySuggestion(text: text, score: score))
+
+            j = j + 1
+          }
+
+          tantivy_suggestions_free(results_ptr, num_results as Int64)
+        }
+
+        Result.Ok(results)
+      }
+      case None -> Result.Error('Index is not open')
+    }
+  }
+
+  # Get access to the lifecycle for checking index state
+  fn pub mut lifecycle -> mut TantivyIndexLifecycle {
+    @lifecycle
+  }
+}

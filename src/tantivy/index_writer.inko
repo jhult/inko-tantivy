@@ -1,0 +1,256 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+# Tantivy index writer operations
+#
+# This module handles document write operations: adding and deleting documents
+# from the Tantivy index.
+
+import input_validation
+import tantivy.ffi (
+  FIELD_OFFSET_VALUE,
+  FIELD_SIZE,
+  tantivy_index_add_doc,
+  tantivy_index_add_docs_batch,
+  tantivy_index_delete_doc,
+  tantivy_index_delete_docs,
+  tantivy_index_get_docs,
+)
+import tantivy.marshal (
+  allocate_and_init_error,
+  check_ffi_error,
+  create_field_array,
+  string_array_to_c_pointers,
+  string_to_c_buffer,
+)
+import tantivy.index_lifecycle (TantivyIndexLifecycle)
+import pointer_helpers (pointer_offset, pointer_to_int, read_usize, write_usize)
+import std.bytes (ByteArray)
+
+# Index writer for document operations
+type pub TantivyIndexWriter {
+  let mut @lifecycle: TantivyIndexLifecycle
+}
+
+impl TantivyIndexWriter {
+  fn pub static new(lifecycle: TantivyIndexLifecycle) -> Self {
+    Self(lifecycle: lifecycle)
+  }
+
+  # Add or update a document in the index
+  fn pub mut add_doc(
+    doc_id: String,
+    fields: Array[(String, String)],
+  ) -> Result[Bool, String] {
+    match @lifecycle.index_ptr {
+      case Some(idx) -> {
+        for (field_name, _) in fields.iter {
+          if field_name.size == 0 {
+            return Result.Error('Field name cannot be empty')
+          }
+        }
+
+        let doc_id_buf = string_to_c_buffer(doc_id)
+
+        let (fields_buf, _strings) = create_field_array(fields)
+        let fields_ptr = fields_buf.pointer
+
+        let (_error_out_storage, error_out_ptr) = allocate_and_init_error
+
+        let result = tantivy_index_add_doc(
+          idx,
+          doc_id_buf.pointer,
+          fields_ptr,
+          fields.size as Int64,
+          error_out_ptr as Pointer[UInt8],
+        )
+
+        match check_ffi_error(error_out_ptr) {
+          case Error(e) -> return Result.Error(e)
+          case Ok(_) -> {}
+        }
+
+        if (result as Int) == 0 {
+          Result.Ok(true)
+        } else {
+          Result.Error(
+            'Failed to index document with ID: "${doc_id}". '
+              + 'Possible causes: 1) Invalid field names, 2) Data exceeds buffer size, '
+              + '3) Duplicate document ID, 4) Schema mismatch. '
+              + 'Suggestions: Check field names match schema, reduce document size, '
+              + 'or verify document ID is unique.',
+          )
+        }
+      }
+      case None -> Result.Error('Index is not open')
+    }
+  }
+
+  # Add or update multiple documents in a batch (more efficient than individual add_doc calls)
+  fn pub mut add_docs_batch(
+    docs: Array[(String, Array[(String, String)])],
+  ) -> Result[Int, String] {
+    match @lifecycle.index_ptr {
+      case Some(idx) -> {
+        let num_docs = docs.size
+        let mut total_fields = 0
+
+        for (_, fields) in docs.iter {
+          total_fields = total_fields + fields.size
+        }
+
+        let docs_array_size = num_docs * 24
+        let docs_buf = ByteArray.filled(with: 0, times: docs_array_size)
+        let docs_ptr = docs_buf.pointer
+
+        let fields_array_size = total_fields * FIELD_SIZE
+        let fields_buf = ByteArray.filled(with: 0, times: fields_array_size)
+        let fields_ptr = fields_buf.pointer
+
+        let mut doc_offset = 0
+        let mut field_offset = 0
+        let mut string_buffers = []
+
+        for (doc_id, fields) in docs.iter {
+          let doc_id_buf = string_to_c_buffer(doc_id)
+          string_buffers.push(doc_id_buf)
+
+          write_usize(pointer_offset(docs_ptr, doc_offset), pointer_to_int(doc_id_buf.pointer))
+          write_usize(pointer_offset(docs_ptr, doc_offset + 8), field_offset as Int)
+          write_usize(pointer_offset(docs_ptr, doc_offset + 16), fields.size as Int)
+
+          doc_offset = doc_offset + 24
+
+          for (field_name, field_value) in fields {
+            let name_buf = string_to_c_buffer(field_name)
+            let value_buf = string_to_c_buffer(field_value)
+            string_buffers.push(name_buf)
+            string_buffers.push(value_buf)
+
+            let base_offset = field_offset
+            write_usize(pointer_offset(fields_ptr, base_offset), pointer_to_int(name_buf.pointer))
+            write_usize(
+              pointer_offset(fields_ptr, base_offset + FIELD_OFFSET_VALUE),
+              pointer_to_int(value_buf.pointer),
+            )
+
+            field_offset = field_offset + FIELD_SIZE
+          }
+        }
+
+        let (_error_out_storage, error_out_ptr) = allocate_and_init_error
+
+        let result = tantivy_index_add_docs_batch(
+          idx,
+          docs_ptr,
+          fields_ptr,
+          num_docs as Int64,
+          total_fields as Int64,
+          error_out_ptr,
+        )
+
+        match check_ffi_error(error_out_ptr) {
+          case Error(e) -> return Result.Error(e)
+          case Ok(_) -> {}
+        }
+
+        if (result as Int) >= 0 {
+          Result.Ok(result as Int)
+        } else {
+          Result.Error(
+            'Failed to add batch of documents. '
+              + 'Possible causes: 1) Invalid field names, 2) Data exceeds buffer size, '
+              + '3) Duplicate document IDs, 4) Schema mismatch. '
+              + 'Suggestions: Check field names match schema, reduce document sizes, '
+              + 'or verify document IDs are unique.',
+          )
+        }
+      }
+      case None -> Result.Error('Index is not open')
+    }
+  }
+
+  # Delete a single document from the index
+  fn pub mut delete_doc(doc_id: String) -> Result[Bool, String] {
+    match @lifecycle.index_ptr {
+      case Some(idx) -> {
+        let doc_id_buf = string_to_c_buffer(doc_id)
+
+        let (_error_out_storage, error_out_ptr) = allocate_and_init_error
+
+        let result = tantivy_index_delete_doc(
+          idx,
+          doc_id_buf.pointer,
+          error_out_ptr,
+        )
+
+        match check_ffi_error(error_out_ptr) {
+          case Error(e) -> return Result.Error(e)
+          case Ok(_) -> {}
+        }
+
+        if (result as Int) == 0 {
+          Result.Ok(true)
+        } else {
+          Result.Error(
+            'Failed to delete document with ID: "${doc_id}". '
+              + 'Possible causes: 1) Document ID does not exist, 2) Index is locked, '
+              + '3) Insufficient permissions. '
+              + 'Suggestions: Verify document ID exists, check if index is being modified, '
+              + 'or verify write permissions.',
+          )
+        }
+      }
+      case None -> Result.Error('Index is not open')
+    }
+  }
+
+  # Delete multiple documents from the index
+  fn pub mut delete_documents(doc_ids: Array[String]) -> Result[Int, String] {
+    match @lifecycle.index_ptr {
+      case None -> Result.Error('Index is not open')
+      case Some(idx) -> {
+        let doc_ids_count = doc_ids.size
+
+        let (c_strings, _ctx) = string_array_to_c_pointers(doc_ids)
+
+        let (_error_out_storage, error_out_ptr) = allocate_and_init_error
+
+        let result = tantivy_index_delete_docs(
+          idx,
+          c_strings.pointer,
+          doc_ids_count as Int64,
+          error_out_ptr,
+        )
+
+        if (result as Int) == -1 {
+          match check_ffi_error(error_out_ptr) {
+            case Error(e) -> Result.Error(e)
+            case Ok(_) -> Result.Error('Batch delete failed with unknown error')
+          }
+        } else {
+          Result.Ok(result as Int)
+        }
+      }
+    }
+  }
+
+  # Delete documents by account and folder (for IMAP sync)
+  fn pub mut delete_by_account_folder(
+    account_id: String,
+    folder_name: String,
+    uids: Array[Int],
+  ) -> Result[Int, String] {
+    let mut doc_ids = []
+
+    for uid in uids { doc_ids.push('${account_id}:${folder_name}:${uid}') }
+
+    self.delete_documents(doc_ids)
+  }
+
+  # Get access to the lifecycle for checking index state
+  fn pub mut lifecycle -> mut TantivyIndexLifecycle {
+    @lifecycle
+  }
+}
