@@ -5,7 +5,8 @@
 # Tantivy FFI bindings
 #
 # This module contains all FFI function declarations and C struct layout constants.
-
+# The struct layout constants are auto-generated from Rust code by build.rs
+#
 # Default buffer size for reading JSON from Tantivy
 # Increased to 1MB to handle large documents with many fields
 # If documents exceed this size, an error will be returned
@@ -20,16 +21,17 @@ let pub DEFAULT_STRING_FIELD_BUFFER_SIZE = 4096 # 4KB
 let pub TANTIVY_ERROR_BUFFER_SIZE = 1024 # 1KB
 
 # FFI Struct layout constants (64-bit architecture)
-# These must match the Rust struct definitions in native/tantivy-c/src/lib.rs
+# These are auto-generated from Rust struct definitions in native/tantivy-c/src/lib.rs
+# Single source of truth - Rust definitions with #[repr(C)] and offset_of! macros
 
 # Pointer size on 64-bit systems (all pointers are 8 bytes)
 let pub PTR_SIZE = 8
 
-# TantivyConfig struct (40 bytes total):
+# Config struct (40 bytes total):
 # - index_path pointer (8 bytes)
-# - reader_memory_budget_bytes (8 bytes)
-# - writer_memory_budget_bytes (8 bytes)
-# - num_threads (8 bytes)
+# - reader_memory_budget_bytes pointer (8 bytes)
+# - writer_memory_budget_bytes pointer (8 bytes)
+# - num_threads pointer (8 bytes)
 # - schema_json pointer (8 bytes)
 let pub CONFIG_SIZE = 40
 let pub CONFIG_OFFSET_PATH = 0
@@ -38,30 +40,30 @@ let pub CONFIG_OFFSET_WRITER_MEMORY = 16
 let pub CONFIG_OFFSET_THREADS = 24
 let pub CONFIG_OFFSET_SCHEMA_JSON = 32
 
-# TantivyResult struct (24 bytes total):
+# Result struct (24 bytes total):
 # - doc_id pointer (8 bytes)
-# - score f32 (4 bytes) + padding (4 bytes for alignment)
+# - score pointer (8 bytes)
 # - highlight pointer (8 bytes)
 let pub RESULT_SIZE = 24
 let pub RESULT_OFFSET_DOC_ID = 0
 let pub RESULT_OFFSET_SCORE = 8
 let pub RESULT_OFFSET_HIGHLIGHT = 16
 
-# TantivyAggregationResult struct (16 bytes total):
+# AggregationResult struct (16 bytes total):
 # - key pointer (8 bytes)
-# - count u64 (8 bytes)
+# - count pointer (8 bytes)
 let pub AGGREGATION_SIZE = 16
 let pub AGGREGATION_OFFSET_KEY = 0
 let pub AGGREGATION_OFFSET_COUNT = 8
 
-# TantivySuggestion struct (16 bytes total):
+# Suggestion struct (16 bytes total):
 # - text pointer (8 bytes)
-# - score f32 (4 bytes) + padding (4 bytes for alignment)
+# - score pointer (8 bytes)
 let pub SUGGESTION_SIZE = 16
 let pub SUGGESTION_OFFSET_TEXT = 0
 let pub SUGGESTION_OFFSET_SCORE = 8
 
-# DocField struct (16 bytes total):
+# Field struct (16 bytes total):
 # - key pointer (8 bytes)
 # - value pointer (8 bytes)
 let pub FIELD_SIZE = 16
@@ -71,134 +73,57 @@ let pub FIELD_OFFSET_VALUE = 8
 # BatchDocument struct (24 bytes total):
 # - doc_id pointer (8 bytes)
 # - fields pointer (8 bytes)
-# - num_fields (8 bytes)
+# - num_fields pointer (8 bytes)
 let pub BATCH_DOCUMENT_SIZE = 24
+let pub BATCH_DOCUMENT_OFFSET_DOC_ID = 0
+let pub BATCH_DOCUMENT_OFFSET_FIELDS = 8
+let pub BATCH_DOCUMENT_OFFSET_NUM_FIELDS = 16
 
-# Link the Tantivy C library
+# Link to Tantivy C library
 import extern "tantivy_c"
 
 # External FFI functions from the Tantivy C library
 
 # Simple ping function to check if FFI library is loaded
-fn pub extern tantivy_ping -> Int
+fn pub extern tantivy_ping() -> Int
 
-fn pub extern tantivy_index_open(
-  config: Pointer[UInt8],
-  error_out: Pointer[UInt8],
-) -> Pointer[UInt8]
+fn pub extern tantivy_index_open(config: Pointer[UInt8], error_out: Pointer[UInt8]) -> Pointer[UInt8]
 
-fn pub extern tantivy_index_close(
-  index: Pointer[UInt8],
-  error_out: Pointer[UInt8],
-) -> Int32
+fn pub extern tantivy_index_close(index: Pointer[UInt8], error_out: Pointer[UInt8]) -> Int32
 
-fn pub extern tantivy_index_add_doc(
-  index: Pointer[UInt8],
-  doc_id: Pointer[UInt8],
-  fields: Pointer[UInt8],
-  num_fields: Int64,
-  error_out: Pointer[UInt8],
-) -> Int32
+fn pub extern tantivy_index_add_doc(index: Pointer[UInt8], doc_id: Pointer[UInt8], fields: Pointer[UInt8], num_fields: Int64, error_out: Pointer[UInt8]) -> Int32
 
-fn pub extern tantivy_index_add_docs_batch(
-  index: Pointer[UInt8],
-  documents: Pointer[UInt8],
-  num_docs: Int64,
-  error_out: Pointer[UInt8],
-) -> Int32
+fn pub extern tantivy_index_add_docs_batch(index: Pointer[UInt8], documents: Pointer[UInt8], num_docs: Int64, error_out: Pointer[UInt8]) -> Int32
 
-fn pub extern tantivy_index_delete_doc(
-  index: Pointer[UInt8],
-  doc_id: Pointer[UInt8],
-  error_out: Pointer[UInt8],
-) -> Int32
+fn pub extern tantivy_index_delete_doc(index: Pointer[UInt8], doc_id: Pointer[UInt8], error_out: Pointer[UInt8]) -> Int32
 
-fn pub extern tantivy_index_delete_docs(
-  index: Pointer[UInt8],
-  doc_ids: Pointer[UInt8],
-  num_ids: Int64,
-  error_out: Pointer[UInt8],
-) -> Int32
+fn pub extern tantivy_index_delete_docs(index: Pointer[UInt8], doc_ids: Pointer[UInt8], num_ids: Int64, error_out: Pointer[UInt8]) -> Int32
 
-fn pub extern tantivy_index_search(
-  index: Pointer[UInt8],
-  query: Pointer[UInt8],
-  limit: Int64,
-  offset: Int64,
-  results_out: Pointer[UInt8],
-  num_results_out: Pointer[UInt64],
-  error_out: Pointer[UInt8],
-) -> Int32
+fn pub extern tantivy_index_search(index: Pointer[UInt8], query: Pointer[UInt8], limit: Int64, offset: Int64, results_out: Pointer[UInt8], num_results_out: Pointer[UInt64], error_out: Pointer[UInt8]) -> Int32
 
-fn pub extern tantivy_index_commit(
-  index: Pointer[UInt8],
-  error_out: Pointer[UInt8],
-) -> Int32
+fn pub extern tantivy_index_commit(index: Pointer[UInt8], error_out: Pointer[UInt8]) -> Int32
 
-fn pub extern tantivy_index_rollback(
-  index: Pointer[UInt8],
-  error_out: Pointer[UInt8],
-) -> Int32
+fn pub extern tantivy_index_rollback(index: Pointer[UInt8], error_out: Pointer[UInt8]) -> Int32
 
 fn pub extern tantivy_result_free(results: Pointer[UInt8], num_results: Int64)
 
 fn pub extern tantivy_error_free(error: Pointer[UInt8])
 
-fn pub extern tantivy_index_get_doc(
-  index: Pointer[UInt8],
-  doc_id: Pointer[UInt8],
-  error_out: Pointer[UInt8],
-) -> Pointer[UInt8]
+fn pub extern tantivy_index_get_doc(index: Pointer[UInt8], doc_id: Pointer[UInt8], error_out: Pointer[UInt8]) -> Pointer[UInt8]
 
 fn pub extern tantivy_string_free(s: Pointer[UInt8])
 
-fn pub extern tantivy_index_get_docs(
-  index: Pointer[UInt8],
-  doc_ids: Pointer[UInt8],
-  num_ids: Int64,
-  num_results_out: Pointer[UInt64],
-  error_out: Pointer[UInt8],
-) -> Pointer[UInt8]
+fn pub extern tantivy_index_get_docs(index: Pointer[UInt8], doc_ids: Pointer[UInt8], num_ids: Int64, num_results_out: Pointer[UInt64], error_out: Pointer[UInt8]) -> Pointer[UInt8]
 
 fn pub extern tantivy_docs_array_free(docs: Pointer[UInt8], num_docs: Int64)
 
-fn pub extern tantivy_aggregate_terms(
-  index: Pointer[UInt8],
-  field_name: Pointer[UInt8],
-  query: Pointer[UInt8],
-  limit: Int64,
-  results_out: Pointer[UInt8],
-  num_results_out: Pointer[UInt64],
-  error_out: Pointer[UInt8],
-) -> Int32
+fn pub extern tantivy_aggregate_terms(index: Pointer[UInt8], field_name: Pointer[UInt8], query: Pointer[UInt8], limit: Int64, results_out: Pointer[UInt8], num_results_out: Pointer[UInt64], error_out: Pointer[UInt8]) -> Int32
 
-fn pub extern tantivy_aggregation_results_free(
-  results: Pointer[UInt8],
-  num_results: Int64,
-)
+fn pub extern tantivy_aggregation_results_free(results: Pointer[UInt8], num_results: Int64)
 
-fn pub extern tantivy_autocomplete(
-  index: Pointer[UInt8],
-  field: Pointer[UInt8],
-  prefix: Pointer[UInt8],
-  limit: Int64,
-  results_out: Pointer[UInt8],
-  num_results_out: Pointer[UInt64],
-  error_out: Pointer[UInt8],
-) -> Int32
+fn pub extern tantivy_autocomplete(index: Pointer[UInt8], field: Pointer[UInt8], prefix: Pointer[UInt8], limit: Int64, results_out: Pointer[UInt8], num_results_out: Pointer[UInt64], error_out: Pointer[UInt8]) -> Int32
 
-fn pub extern tantivy_did_you_mean(
-  index: Pointer[UInt8],
-  field: Pointer[UInt8],
-  term: Pointer[UInt8],
-  distance: Int32,
-  limit: Int64,
-  results_out: Pointer[UInt8],
-  num_results_out: Pointer[UInt64],
-  error_out: Pointer[UInt8],
-) -> Int32
+fn pub extern tantivy_did_you_mean(index: Pointer[UInt8], field: Pointer[UInt8], term: Pointer[UInt8], distance: Int32, limit: Int64, results_out: Pointer[UInt8], num_results_out: Pointer[UInt64], error_out: Pointer[UInt8]) -> Int32
 
-fn pub extern tantivy_suggestions_free(
-  results: Pointer[UInt8],
-  num_results: Int64,
-)
+fn pub extern tantivy_suggestions_free(results: Pointer[UInt8], num_results: Int64)
+
