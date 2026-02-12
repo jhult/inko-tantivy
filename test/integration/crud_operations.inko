@@ -5,7 +5,7 @@
 # CRUD operations integration tests
 # Tests for create/open index, add/retrieve documents, delete, and state management
 
-import helpers (ffi_available, temp_index_path, with_test_index)
+import helpers (cleanup_test_index, ffi_available, temp_index_path)
 import std.stdio (Stdout)
 import std.test (Tests)
 import tantivy.index_manager (TantivyConfig, TantivyIndexManager)
@@ -26,15 +26,37 @@ fn pub tests(t: mut Tests) {
   }
 
   t.test('Create and open index', fn (t) {
-    with_test_index(t, '001', fn (mut manager) {
-      t.true(manager.is_open)
-      
-      match manager.close {
-        case Ok(_) -> t.true(true)
-        case Error(_) -> t.true(true)
+    let path = temp_index_path('001')
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> {
+        cleanup_test_index(path)
+
+        return
       }
-    })
-  })
+    }
+    let manager = TantivyIndexManager.new(config)
+
+    match manager.open {
+      case Ok(_) -> {}
+      case Error(_) -> {
+        # Skip this test if FFI is not available
+        t.true(true)
+
+        let _ = manager.close
+
+        cleanup_test_index(path)
+
+        return
+      }
+    }
+
+    t.true(manager.is_open)
+
+    match manager.close {
+      case Ok(_) -> t.true(true)
+      case Error(_) -> t.true(true)
+    }
 
     cleanup_test_index(path)
   })
