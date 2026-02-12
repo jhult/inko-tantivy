@@ -128,10 +128,16 @@ impl TantivyConfig {
   # - String buffer: 4KB (sufficient for most fields)
   #
   # Use `with_*` methods to customize for your workload.
+  #
+  # Default memory budgets (tuned for typical workloads)
+  let pub DEFAULT_READER_MEMORY = 50_000_000 # 50MB
+  let pub DEFAULT_WRITER_MEMORY = 100_000_000 # 100MB
+  let pub DEFAULT_NUM_THREADS = 4
+
   fn pub static new(index_path: String) -> Result[TantivyConfig, String] {
-    let reader_memory = 50_000_000
-    let writer_memory = 100_000_000
-    let num_threads = 4
+    let reader_memory = DEFAULT_READER_MEMORY
+    let writer_memory = DEFAULT_WRITER_MEMORY
+    let num_threads = DEFAULT_NUM_THREADS
     let json_buffer_size = DEFAULT_JSON_BUFFER_SIZE
     let string_buffer_size = DEFAULT_STRING_FIELD_BUFFER_SIZE
 
