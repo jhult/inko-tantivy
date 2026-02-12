@@ -1038,8 +1038,12 @@ impl TantivyIndexManager {
                 )
               } else {
                 Result.Ok(json_str)
-              }
-            }
+          }
+
+          # Clear string_buffers after processing this document
+          # This ensures only one document's strings are kept alive at a time
+          string_buffers.clear
+        }
           }
         }
       }
