@@ -26,6 +26,43 @@ type pub MemoryTracker {
   let @name: String
 }
 
+fn sort_tuple_by_second_desc(
+  mut data: Array[(String, Int)],
+) -> Array[(String, Int)] {
+  let mut i = 0
+
+  while i < data.size {
+    let mut max_j = i
+    let mut j = i + 1
+
+    while j < data.size {
+      match data.get(j) {
+        case Ok((_, val_j)) -> {
+          match data.get(max_j) {
+            case Ok((_, val_max)) -> if val_j > val_max { max_j = j }
+            case Error(_) -> {}
+          }
+        }
+        case Error(_) -> {}
+      }
+
+      j = j + 1
+    }
+
+    let temp = data.get(i).or_panic
+    let temp_val = data.get(max_j).or_panic
+    let temp_clone = (temp.0.clone, temp.1)
+    let temp_val_clone = (temp_val.0.clone, temp_val.1)
+
+    data.set(i, temp_val_clone)
+    data.set(max_j, temp_clone)
+
+    i = i + 1
+  }
+
+  data
+}
+
 impl MemoryTracker {
   fn pub static new(name: String) -> MemoryTracker {
     MemoryTracker(
@@ -141,21 +178,31 @@ impl MemoryTracker {
 
     if @allocations > 0 {
       let _ = Stdout.new.print('Allocations by type:')
-
-      let mut sorted = @allocations_by_type.clone
-      let mut i = 0
-
-      while i < sorted.size {
-        let mut max_j = i
-        let mut j = i + 1
-
-        while j < sorted.size {
-          match sorted.get(j) {
-            case Ok((_, count_j)) -> {
-              match sorted.get(max_j) {
-                case Ok((_, count_max)) -> if count_j > count_max { max_j = j }
-                case Error(_) -> {}
-              }
+ 
+      let sorted = sort_tuple_by_second_desc(@allocations_by_type.clone)
+ 
+      for (ty, count) in sorted.iter {
+        let percentage = (count * 100) / @allocations
+ 
+        let _ = Stdout.new.print('    ${ty}: ${count} (${percentage}%)')
+      }
+ 
+      let _ = Stdout.new.print('')
+ 
+      let _ = Stdout.new.print('Bytes allocated by type:')
+ 
+      sorted = sort_tuple_by_second_desc(@bytes_by_type.clone)
+ 
+      for (ty, bytes_val) in sorted.iter {
+        let percentage = (bytes_val * 100) / @bytes_allocated
+ 
+        let _ = Stdout.new.print(
+          '    ${ty}: ${format_bytes(bytes_val)} (${percentage}%)',
+        )
+      }
+    }
+  }
+}
             }
             case Error(_) -> {}
           }
