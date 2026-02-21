@@ -7,7 +7,8 @@
 
 import helpers (cleanup_test_index, temp_index_path)
 import std.test (Tests)
-import tantivy.index_manager (TantivyConfig, TantivyIndexManager)
+import tantivy.index_manager (TantivyIndexManager)
+import tantivy.types (TantivyConfig)
 
 fn pub tests(t: mut Tests) {
   # Test edge case: empty doc_id

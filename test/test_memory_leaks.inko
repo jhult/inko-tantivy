@@ -3,7 +3,8 @@
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 import std.test (Tests)
-import tantivy.index_manager (TantivyConfig, TantivyIndexManager)
+import tantivy.index_manager (TantivyIndexManager)
+import tantivy.types (TantivyConfig)
 
 fn pub tests(t: mut Tests) {
   t.test('Repeated search operations complete successfully', fn (t) {

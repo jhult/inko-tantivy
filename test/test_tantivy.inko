@@ -3,10 +3,10 @@
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 import std.test (Tests)
-import tantivy.index_manager (
+import tantivy.query_builder (TantivyQueryBuilder)
+import tantivy.types (
   TantivyAggregationResult, TantivyConfig, TantivyResult, TantivySuggestion,
 )
-import tantivy.query_builder (TantivyQueryBuilder)
 
 fn pub tests(t: mut Tests) {
   # TantivyConfig path validation tests

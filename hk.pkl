@@ -11,8 +11,14 @@ local linters = new Mapping<String, Step> {
     ["bd-sync"] {
         check = "bd sync --flush-only"
     }
+    ["inko-fmt"] {
+        glob = "*.inko"
+        check = "inko fmt --check {{files}}"
+        fix = "inko fmt {{files}}"
+    }
     ["license-eye"] {
-        check = "license-eye header fix"
+        check = "license-eye header check {{files}}"
+        fix = "license-eye header fix {{files}}"
     }
 }
 
@@ -20,6 +26,7 @@ hooks {
     ["pre-commit"] {
         steps {
             ["bd-sync"] = linters["bd-sync"]
+            ["inko-fmt"] = linters["inko-fmt"]
             ["license-eye"] = linters["license-eye"]
         }
     }

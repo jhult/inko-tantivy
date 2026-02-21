@@ -178,24 +178,24 @@ impl MemoryTracker {
 
     if @allocations > 0 {
       let _ = Stdout.new.print('Allocations by type:')
- 
+
       let sorted = sort_tuple_by_second_desc(@allocations_by_type.clone)
- 
+
       for (ty, count) in sorted.iter {
         let percentage = (count * 100) / @allocations
- 
+
         let _ = Stdout.new.print('    ${ty}: ${count} (${percentage}%)')
       }
- 
+
       let _ = Stdout.new.print('')
- 
+
       let _ = Stdout.new.print('Bytes allocated by type:')
- 
+
       sorted = sort_tuple_by_second_desc(@bytes_by_type.clone)
- 
+
       for (ty, bytes_val) in sorted.iter {
         let percentage = (bytes_val * 100) / @bytes_allocated
- 
+
         let _ = Stdout.new.print(
           '    ${ty}: ${format_bytes(bytes_val)} (${percentage}%)',
         )

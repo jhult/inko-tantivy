@@ -10,15 +10,15 @@
 import integration.advanced_features
 import integration.batch_operations
 import integration.crud_operations
+import integration.custom_schema
 import integration.edge_cases
+import integration.error_paths
 import integration.ffi_layout
 import integration.persistence
 import integration.search_operations
 import integration.validation
-import integration.error_paths
-import integration.custom_schema
 import std.test (Tests)
-import tantivy.index_manager (TantivyConfig)
+import tantivy.types (TantivyConfig)
 
 # Path validation tests (doesn't require FFI)
 fn test_path_validation(t: mut Tests) {

@@ -37,10 +37,10 @@ impl TantivyQueryBuilder {
     @query_parts.push('${escape_query_string(field)}:[${min} TO ${max}]')
   }
 
-  # Add a filter query
+  # Add a filter query (exact match semantics)
   fn pub mut filter(field: String, value: String) {
     @query_parts.push(
-      '${escape_query_string(field)}:${escape_query_string(value)}',
+      '${escape_query_string(field)}:"${escape_query_string(value)}"',
     )
   }
 

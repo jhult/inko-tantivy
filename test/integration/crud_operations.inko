@@ -8,7 +8,8 @@
 import helpers (cleanup_test_index, ffi_available, temp_index_path)
 import std.stdio (Stdout)
 import std.test (Tests)
-import tantivy.index_manager (TantivyConfig, TantivyIndexManager)
+import tantivy.index_manager (TantivyIndexManager)
+import tantivy.types (TantivyConfig)
 
 fn pub tests(t: mut Tests) {
   # FFI setup and index lifecycle tests

@@ -99,7 +99,7 @@ jobs:
             lib_name: tantivy_c.dll
             use_container: false
 
-    container: ${{ matrix.use_container && 'ghcr.io/inko-lang/inko:latest' || null }}
+    container: ${{ matrix.use_container && 'ghcr.io/inko-lang/inko:main' || null }}
 
     steps:
       - name: Checkout

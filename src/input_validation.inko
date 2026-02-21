@@ -39,6 +39,7 @@ fn pub is_valid_field_name_format(name: String) -> Bool {
   if !is_letter_byte(first) and first != 95 { return false }
 
   let mut i = 1
+
   while i < bytes.size {
     match bytes.get(i) {
       case Ok(byte) -> {
@@ -46,8 +47,9 @@ fn pub is_valid_field_name_format(name: String) -> Bool {
           return false
         }
       }
-      case Error(_) -> { return false }
+      case Error(_) -> return false
     }
+
     i = i + 1
   }
 

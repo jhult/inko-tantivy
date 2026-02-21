@@ -185,11 +185,7 @@ fn pub c_pointer_to_string(ptr: Pointer[UInt8], max_len: Int) -> String {
     let byte_ptr = (ptr as Int + length) as Pointer[UInt8]
     let byte = byte_ptr.0
 
-    if (byte as Int) == 0 {
-      counting = false
-    } else {
-      length = length + 1
-    }
+    if (byte as Int) == 0 { counting = false } else { length = length + 1 }
   }
 
   # Second pass: allocate only the exact size needed
@@ -225,11 +221,7 @@ fn pub c_pointer_to_string_checked(
     let byte_ptr = (ptr as Int + length) as Pointer[UInt8]
     let byte = byte_ptr.0
 
-    if (byte as Int) == 0 {
-      counting = false
-    } else {
-      length = length + 1
-    }
+    if (byte as Int) == 0 { counting = false } else { length = length + 1 }
   }
 
   # Check if we hit the limit without finding null terminator
@@ -263,6 +255,7 @@ fn pub allocate_error_output -> (ByteArray, Pointer[UInt8]) {
 # Returns storage (for lifetime) and pointer (for FFI)
 fn pub allocate_and_init_error -> (ByteArray, Pointer[UInt8]) {
   let (storage, ptr) = allocate_error_output
+
   write_usize(ptr, 0)
   (storage, ptr)
 }
@@ -308,6 +301,7 @@ fn pub string_array_to_c_pointers(
 
   for s in strings {
     ctx.retain_string(s)
+
     let ptr = s.pointer
     let ptr_int = pointer_to_int(ptr)
     let _ = write_usize(pointer_offset(pointers.pointer, i), ptr_int)

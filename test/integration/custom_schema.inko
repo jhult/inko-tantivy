@@ -6,7 +6,8 @@
 
 import helpers (cleanup_test_index, ffi_available, temp_index_path)
 import std.test (Tests)
-import tantivy.index_manager (TantivyConfig, TantivyIndexManager)
+import tantivy.index_manager (TantivyIndexManager)
+import tantivy.types (TantivyConfig)
 
 fn pub tests(t: mut Tests) {
   if !ffi_available { return }
@@ -43,10 +44,7 @@ fn pub tests(t: mut Tests) {
 
     match manager.open {
       case Ok(_) -> {
-        let fields = [
-          ('title', 'Test Title'),
-          ('content', 'Test Content'),
-        ]
+        let fields = [('title', 'Test Title'), ('content', 'Test Content')]
 
         match manager.add_doc('doc-1', fields) {
           case Ok(_) -> t.true(true)
@@ -57,6 +55,7 @@ fn pub tests(t: mut Tests) {
     }
 
     let _ = manager.close
+
     cleanup_test_index(path)
   })
 
@@ -102,11 +101,7 @@ fn pub tests(t: mut Tests) {
 
         match manager.search('search', 10, 0) {
           case Ok(results) -> {
-            if results.size > 0 {
-              t.true(true)
-            } else {
-              t.true(false)
-            }
+            if results.size > 0 { t.true(true) } else { t.true(false) }
           }
           case Error(_) -> t.true(false)
         }
@@ -115,6 +110,7 @@ fn pub tests(t: mut Tests) {
     }
 
     let _ = manager.close
+
     cleanup_test_index(path)
   })
 
@@ -177,6 +173,7 @@ fn pub tests(t: mut Tests) {
     }
 
     let _ = manager.close
+
     cleanup_test_index(path)
   })
 
@@ -228,6 +225,7 @@ fn pub tests(t: mut Tests) {
     }
 
     let _ = manager.close
+
     cleanup_test_index(path)
   })
 
@@ -263,10 +261,7 @@ fn pub tests(t: mut Tests) {
 
     match manager.open {
       case Ok(_) -> {
-        let fields = [
-          ('id', '-12345'),
-          ('name', 'Test Item'),
-        ]
+        let fields = [('id', '-12345'), ('name', 'Test Item')]
 
         match manager.add_doc('item-1', fields) {
           case Ok(_) -> t.true(true)
@@ -277,6 +272,7 @@ fn pub tests(t: mut Tests) {
     }
 
     let _ = manager.close
+
     cleanup_test_index(path)
   })
 
@@ -352,11 +348,7 @@ fn pub tests(t: mut Tests) {
 
         match manager.search('search', 10, 0) {
           case Ok(results) -> {
-            if results.size > 0 {
-              t.true(true)
-            } else {
-              t.true(false)
-            }
+            if results.size > 0 { t.true(true) } else { t.true(false) }
           }
           case Error(_) -> t.true(false)
         }
@@ -365,6 +357,7 @@ fn pub tests(t: mut Tests) {
     }
 
     let _ = manager.close
+
     cleanup_test_index(path)
   })
 
@@ -400,10 +393,7 @@ fn pub tests(t: mut Tests) {
 
     match manager.open {
       case Ok(_) -> {
-        let fields = [
-          ('id', 'EXACT-ID-123'),
-          ('title', 'Test Document'),
-        ]
+        let fields = [('id', 'EXACT-ID-123'), ('title', 'Test Document')]
 
         match manager.add_doc('doc-1', fields) {
           case Ok(_) -> t.true(true)
@@ -414,6 +404,7 @@ fn pub tests(t: mut Tests) {
     }
 
     let _ = manager.close
+
     cleanup_test_index(path)
   })
 }

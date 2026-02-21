@@ -7,7 +7,8 @@
 
 import helpers (cleanup_test_index, ffi_available, temp_index_path)
 import std.test (Tests)
-import tantivy.index_manager (TantivyConfig, TantivyIndexManager)
+import tantivy.index_manager (TantivyIndexManager)
+import tantivy.types (TantivyConfig)
 
 fn pub tests(t: mut Tests) {
   # Only run integration tests if FFI is available

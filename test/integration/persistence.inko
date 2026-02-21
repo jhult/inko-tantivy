@@ -6,7 +6,8 @@
 
 import helpers (cleanup_test_index, ffi_available, temp_index_path)
 import std.test (Tests)
-import tantivy.index_manager (TantivyConfig, TantivyIndexManager)
+import tantivy.index_manager (TantivyIndexManager)
+import tantivy.types (TantivyConfig)
 
 fn pub tests(t: mut Tests) {
   if !ffi_available { return }
@@ -36,6 +37,7 @@ fn pub tests(t: mut Tests) {
           case Ok(_) -> {}
           case Error(_) -> {
             let _ = manager.close
+
             cleanup_test_index(path)
             t.true(false)
             return
@@ -54,6 +56,7 @@ fn pub tests(t: mut Tests) {
           }
         }
         let mut manager2 = TantivyIndexManager.new(config2)
+
         match manager2.open {
           case Ok(_) -> {
             match manager2.search('document', 10, 0) {
@@ -67,6 +70,7 @@ fn pub tests(t: mut Tests) {
               }
               case Error(_) -> t.true(false)
             }
+
             let _ = manager2.close
           }
           case Error(_) -> t.true(false)
@@ -112,19 +116,18 @@ fn pub tests(t: mut Tests) {
           }
         }
         let mut manager2 = TantivyIndexManager.new(config2)
+
         match manager2.open {
           case Ok(_) -> {
             match manager2.autocomplete('subject', 'aut', 10) {
               case Ok(results) -> {
                 let result_count = results.size
-                if result_count == 1 {
-                  t.true(true)
-                } else {
-                  t.false(true)
-                }
+
+                if result_count == 1 { t.true(true) } else { t.false(true) }
               }
               case Error(_) -> t.true(false)
             }
+
             let _ = manager2.close
           }
           case Error(_) -> t.true(false)
@@ -179,15 +182,18 @@ fn pub tests(t: mut Tests) {
           }
         }
         let mut manager2 = TantivyIndexManager.new(config2)
+
         match manager2.open {
           case Ok(_) -> {
             match manager2.search('committed', 10, 0) {
               case Ok(results) -> {
                 let result_count = results.size
+
                 if result_count == 1 {
                   match manager2.search('uncommitted', 10, 0) {
                     case Ok(results2) -> {
                       let result_count2 = results2.size
+
                       if result_count2 == 0 {
                         t.true(true)
                       } else {
@@ -202,6 +208,7 @@ fn pub tests(t: mut Tests) {
               }
               case Error(_) -> t.true(false)
             }
+
             let _ = manager2.close
           }
           case Error(_) -> t.true(false)
