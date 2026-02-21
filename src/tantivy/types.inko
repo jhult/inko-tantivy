@@ -1,0 +1,463 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+#
+# Tantivy shared types, configuration, and constants
+#
+# This module contains all shared types used across the tantivy modules:
+# result types, configuration, and default constants.
+
+import pointer_helpers (pointer_offset, pointer_to_int, write_usize)
+import std.bytes (ByteArray)
+import std.fs.path (Path)
+import tantivy.ffi (
+  CONFIG_OFFSET_READER_MEMORY, CONFIG_OFFSET_SCHEMA_JSON, CONFIG_OFFSET_THREADS,
+  CONFIG_OFFSET_WRITER_MEMORY, CONFIG_SIZE, DEFAULT_JSON_BUFFER_SIZE,
+  DEFAULT_STRING_FIELD_BUFFER_SIZE,
+)
+import tantivy.marshal (string_to_c_buffer)
+
+# Tantivy search result (Inko-side representation)
+#
+# # Score Precision
+# The `score` field is stored as a Float (f64) in Inko, but the underlying
+# Tantivy library uses f32 for scoring. The conversion from f32 to f64 does not add
+# precision - it merely stores the same f32 value in a larger container.
+#
+# # Why f32 in Tantivy?
+# Tantivy uses f32 for scores to reduce memory usage and improve performance.
+# This is standard practice in search engines (e.g., Elasticsearch, Lucene).
+#
+# # Practical Implications
+# - Scores should not be used for exact comparisons (e.g., `score_a == score_b`)
+# - Small differences (< 1e-7) are likely due to f32 rounding
+# - Use scores for ranking/sorting, not precise calculations
+# - When displaying scores, round to reasonable precision (e.g., 4-6 decimal places)
+type pub TantivyResult {
+  let pub @doc_id: String
+  let pub @score: Float
+  let pub @highlight: Option[String]
+}
+
+# Tantivy aggregation result
+type pub TantivyAggregationResult {
+  let pub @key: String
+  let pub @count: Int
+}
+
+# Tantivy suggestion result
+#
+# # Score Precision
+# The `score` field uses Float (f64) in Inko but is f32 precision from Tantivy.
+# See TantivyResult type for detailed documentation about score precision.
+type pub TantivySuggestion {
+  let pub @text: String
+  let pub @score: Float
+}
+
+# Default memory budgets (tuned for typical workloads)
+let pub DEFAULT_READER_MEMORY = 50_000_000 # 50MB
+let pub DEFAULT_WRITER_MEMORY = 100_000_000 # 100MB
+let pub DEFAULT_NUM_THREADS = 4
+
+# Tantivy index configuration
+#
+# Configures memory budgets and threading for the search index.
+#
+# ## Memory Budgets
+# - `reader_memory_budget_bytes`: Memory allocated for search operations
+#   - Default: 50MB (suitable for small-to-medium indexes)
+#   - Increase for: Large indexes (>1GB), high query throughput
+#   - Trade-off: More memory = faster searches, fewer disk reads
+#
+# - `writer_memory_budget_bytes`: Memory for indexing operations
+#   - Default: 100MB (handles typical document batches)
+#   - Increase for: Large documents, high indexing throughput
+#   - Trade-off: More memory = faster indexing, larger in-memory buffer
+#
+# ## Threading
+# - `num_threads`: Parallel search/indexing threads
+#   - Default: 4 (balanced for multi-core systems)
+#   - Adjust for: Match available CPU cores
+#   - Trade-off: More threads = higher throughput, more CPU usage
+#
+# ## Tuning Guidelines
+# - Small indexes (<100MB): Default settings sufficient
+# - Medium indexes (100MB-1GB): Consider 2x memory budgets
+# - Large indexes (>1GB): 4-8x memory, match threads to CPU cores
+# - Memory-constrained: Reduce budgets to 25MB reader / 50MB writer
+# - High throughput: Increase writer memory, add more threads
+type pub TantivyConfig {
+  let pub @index_path: String
+  let pub @reader_memory_budget_bytes: Int
+  let pub @writer_memory_budget_bytes: Int
+  let pub @num_threads: Int
+  let pub @schema_json: Option[String]
+  let pub @json_buffer_size: Int
+  let pub @string_buffer_size: Int
+}
+
+impl TantivyConfig {
+  # Create a new configuration with default settings
+  #
+  # Defaults are optimized for small-to-medium indexes on typical hardware:
+  # - Reader memory: 50MB (sufficient for most search operations)
+  # - Writer memory: 100MB (handles typical document batches)
+  # - Threads: 4 (balanced for multi-core systems)
+  # - Schema: NULL (use default email schema)
+  # - JSON buffer: 1MB (handles large documents)
+  # - String buffer: 4KB (sufficient for most fields)
+  #
+  # Use `with_*` methods to customize for your workload.
+  fn pub static new(index_path: String) -> Result[TantivyConfig, String] {
+    let reader_memory = DEFAULT_READER_MEMORY
+    let writer_memory = DEFAULT_WRITER_MEMORY
+    let num_threads = DEFAULT_NUM_THREADS
+    let json_buffer_size = DEFAULT_JSON_BUFFER_SIZE
+    let string_buffer_size = DEFAULT_STRING_FIELD_BUFFER_SIZE
+
+    match TantivyConfig.validate_index_path(index_path) {
+      case Ok(_) -> {}
+      case Error(e) -> return Result.Error(e)
+    }
+
+    match TantivyConfig.validate_reader_memory(reader_memory) {
+      case Ok(_) -> {}
+      case Error(e) -> return Result.Error(e)
+    }
+
+    match TantivyConfig.validate_writer_memory(writer_memory) {
+      case Ok(_) -> {}
+      case Error(e) -> return Result.Error(e)
+    }
+
+    match TantivyConfig.validate_num_threads(num_threads) {
+      case Ok(_) -> {}
+      case Error(e) -> return Result.Error(e)
+    }
+
+    match TantivyConfig.validate_json_buffer_size(json_buffer_size) {
+      case Ok(_) -> {}
+      case Error(e) -> return Result.Error(e)
+    }
+
+    match TantivyConfig.validate_string_buffer_size(string_buffer_size) {
+      case Ok(_) -> {}
+      case Error(e) -> return Result.Error(e)
+    }
+
+    Result.Ok(
+      TantivyConfig(
+        index_path: index_path,
+        reader_memory_budget_bytes: reader_memory,
+        writer_memory_budget_bytes: writer_memory,
+        num_threads: num_threads,
+        schema_json: Option.None,
+        json_buffer_size: json_buffer_size,
+        string_buffer_size: string_buffer_size,
+      ),
+    )
+  }
+
+  # Set custom schema JSON configuration
+  #
+  # The schema JSON format:
+  # ```json
+  # {
+  #   "fields": [
+  #     {"name": "title", "type": "text", "indexed": true, "stored": true},
+  #     {"name": "content", "type": "text", "indexed": true, "stored": true},
+  #     {"name": "timestamp", "type": "u64", "indexed": true, "stored": true}
+  #   ],
+  #   "default_search_fields": ["title", "content"]
+  # }
+  # ```
+  #
+  # Supported field types: "text", "string", "u64", "i64", "f64", "bool"
+  # - text: Full-text searchable with tokenization
+  # - string: Exact match without tokenization
+  # - u64/i64/f64: Numeric fields for range queries
+  # - bool: Boolean fields for filtering
+  #
+  # If not provided, a default email schema is used with fields:
+  # - id, account_id, mailbox, message_id (strings)
+  # - subject, body (text, searchable)
+  # - from, to, cc (strings)
+  # - date, size (u64, indexed)
+  # - flags, labels, attachments, thread_id, in_reply_to, references (strings)
+  fn pub with_schema_json(schema: String) -> Result[TantivyConfig, String] {
+    Result.Ok(
+      TantivyConfig(
+        index_path: @index_path.clone,
+        reader_memory_budget_bytes: @reader_memory_budget_bytes,
+        writer_memory_budget_bytes: @writer_memory_budget_bytes,
+        num_threads: @num_threads,
+        schema_json: Option.Some(schema),
+        json_buffer_size: @json_buffer_size,
+        string_buffer_size: @string_buffer_size,
+      ),
+    )
+  }
+
+  # Validate index path to prevent directory traversal attacks
+  fn pub static validate_index_path(path: String) -> Result[Bool, String] {
+    if path.size == 0 { return Result.Error('index_path cannot be empty') }
+
+    let path_obj = Path.new(path)
+
+    # Check for directory traversal components (..)
+    # Using Path.components which normalizes the path
+    for component in path_obj.components {
+      match component {
+        case '..' -> {
+          return Result.Error(
+            'index_path cannot contain ".." (directory traversal not allowed)',
+          )
+        }
+        case _ -> {}
+      }
+    }
+
+    # Check for suspicious patterns that could indicate path manipulation attempts
+    # This helps prevent attacks like URL-encoded variants or obfuscated paths
+    if path.contains?('%2e') or path.contains?('%2E') {
+      return Result.Error(
+        'index_path contains suspicious characters (potential path encoding attack)',
+      )
+    }
+
+    # Check for multiple consecutive dots which could be an obfuscation attempt
+    if path.contains?('...') or path.contains?('....') {
+      return Result.Error('index_path contains suspicious dot sequences')
+    }
+
+    Result.Ok(true)
+  }
+
+  # Validate reader memory budget
+  fn pub static validate_reader_memory(bytes: Int) -> Result[Bool, String] {
+    if bytes < 10_000_000 {
+      return Result.Error(
+        'reader_memory_budget_bytes must be at least 10MB (10,000,000 bytes)',
+      )
+    }
+
+    if bytes > 10_000_000_000 {
+      return Result.Error(
+        'reader_memory_budget_bytes must be at most 10GB (10,000,000,000 bytes)',
+      )
+    }
+
+    Result.Ok(true)
+  }
+
+  # Validate writer memory budget
+  fn pub static validate_writer_memory(bytes: Int) -> Result[Bool, String] {
+    if bytes < 25_000_000 {
+      return Result.Error(
+        'writer_memory_budget_bytes must be at least 25MB (25,000,000 bytes)',
+      )
+    }
+
+    if bytes > 50_000_000_000 {
+      return Result.Error(
+        'writer_memory_budget_bytes must be at most 50GB (50,000,000,000 bytes)',
+      )
+    }
+
+    Result.Ok(true)
+  }
+
+  # Validate num_threads
+  fn pub static validate_num_threads(n: Int) -> Result[Bool, String] {
+    if n < 1 { return Result.Error('num_threads must be at least 1') }
+
+    # Maximum: CPU cores * 2 (assuming max 32 cores for safety)
+    if n > 64 {
+      return Result.Error('num_threads must be at most 64 (CPU cores * 2)')
+    }
+
+    Result.Ok(true)
+  }
+
+  fn pub with_reader_memory(bytes: Int) -> Result[TantivyConfig, String] {
+    match TantivyConfig.validate_reader_memory(bytes) {
+      case Ok(_) -> {}
+      case Error(e) -> return Result.Error(e)
+    }
+
+    Result.Ok(
+      TantivyConfig(
+        index_path: @index_path.clone,
+        reader_memory_budget_bytes: bytes,
+        writer_memory_budget_bytes: @writer_memory_budget_bytes,
+        num_threads: @num_threads,
+        schema_json: @schema_json.clone,
+        json_buffer_size: @json_buffer_size,
+        string_buffer_size: @string_buffer_size,
+      ),
+    )
+  }
+
+  fn pub with_writer_memory(bytes: Int) -> Result[TantivyConfig, String] {
+    match TantivyConfig.validate_writer_memory(bytes) {
+      case Ok(_) -> {}
+      case Error(e) -> return Result.Error(e)
+    }
+
+    Result.Ok(
+      TantivyConfig(
+        index_path: @index_path.clone,
+        reader_memory_budget_bytes: @reader_memory_budget_bytes,
+        writer_memory_budget_bytes: bytes,
+        num_threads: @num_threads,
+        schema_json: @schema_json.clone,
+        json_buffer_size: @json_buffer_size,
+        string_buffer_size: @string_buffer_size,
+      ),
+    )
+  }
+
+  fn pub with_threads(n: Int) -> Result[TantivyConfig, String] {
+    match TantivyConfig.validate_num_threads(n) {
+      case Ok(_) -> {}
+      case Error(e) -> return Result.Error(e)
+    }
+
+    Result.Ok(
+      TantivyConfig(
+        index_path: @index_path.clone,
+        reader_memory_budget_bytes: @reader_memory_budget_bytes,
+        writer_memory_budget_bytes: @writer_memory_budget_bytes,
+        num_threads: n,
+        schema_json: @schema_json.clone,
+        json_buffer_size: @json_buffer_size,
+        string_buffer_size: @string_buffer_size,
+      ),
+    )
+  }
+
+  # Validate JSON buffer size
+  # Used for reading document JSON from Tantivy
+  fn pub static validate_json_buffer_size(bytes: Int) -> Result[Bool, String] {
+    if bytes < 1024 {
+      return Result.Error('json_buffer_size must be at least 1KB (1,024 bytes)')
+    }
+
+    if bytes > 100_000_000 {
+      return Result.Error(
+        'json_buffer_size must be at most 100MB (100,000,000 bytes)',
+      )
+    }
+
+    Result.Ok(true)
+  }
+
+  # Validate string buffer size
+  # Used for reading individual string fields (doc IDs, highlights, etc.)
+  fn pub static validate_string_buffer_size(
+    bytes: Int,
+  ) -> Result[Bool, String] {
+    if bytes < 256 {
+      return Result.Error('string_buffer_size must be at least 256 bytes')
+    }
+
+    if bytes > 1_000_000 {
+      return Result.Error(
+        'string_buffer_size must be at most 1MB (1,000,000 bytes)',
+      )
+    }
+
+    Result.Ok(true)
+  }
+
+  # Set JSON buffer size
+  # Useful for handling large documents or reducing memory footprint
+  fn pub with_json_buffer_size(bytes: Int) -> Result[TantivyConfig, String] {
+    match TantivyConfig.validate_json_buffer_size(bytes) {
+      case Ok(_) -> {}
+      case Error(e) -> return Result.Error(e)
+    }
+
+    Result.Ok(
+      TantivyConfig(
+        index_path: @index_path.clone,
+        reader_memory_budget_bytes: @reader_memory_budget_bytes,
+        writer_memory_budget_bytes: @writer_memory_budget_bytes,
+        num_threads: @num_threads,
+        schema_json: @schema_json.clone,
+        json_buffer_size: bytes,
+        string_buffer_size: @string_buffer_size,
+      ),
+    )
+  }
+
+  # Set string buffer size
+  # Useful for handling large field values or reducing memory footprint
+  fn pub with_string_buffer_size(bytes: Int) -> Result[TantivyConfig, String] {
+    match TantivyConfig.validate_string_buffer_size(bytes) {
+      case Ok(_) -> {}
+      case Error(e) -> return Result.Error(e)
+    }
+
+    Result.Ok(
+      TantivyConfig(
+        index_path: @index_path.clone,
+        reader_memory_budget_bytes: @reader_memory_budget_bytes,
+        writer_memory_budget_bytes: @writer_memory_budget_bytes,
+        num_threads: @num_threads,
+        schema_json: @schema_json.clone,
+        json_buffer_size: @json_buffer_size,
+        string_buffer_size: bytes,
+      ),
+    )
+  }
+
+  # Convert to C struct format (ByteArray for manual memory layout)
+  # Returns both the struct and the string buffers that must be kept alive
+  # during the FFI call
+  fn pub to_c_struct -> (ByteArray, Array[String]) {
+    let buf = ByteArray.filled(with: 0, times: CONFIG_SIZE)
+    let mut buffers = []
+
+    let path_buf = string_to_c_buffer(@index_path)
+
+    write_usize(buf.pointer, pointer_to_int(path_buf.pointer))
+
+    buffers.push(path_buf)
+
+    write_usize(
+      pointer_offset(buf.pointer, CONFIG_OFFSET_READER_MEMORY),
+      @reader_memory_budget_bytes,
+    )
+
+    write_usize(
+      pointer_offset(buf.pointer, CONFIG_OFFSET_WRITER_MEMORY),
+      @writer_memory_budget_bytes,
+    )
+
+    write_usize(
+      pointer_offset(buf.pointer, CONFIG_OFFSET_THREADS),
+      @num_threads,
+    )
+
+    match @schema_json {
+      case Some(schema) -> {
+        let schema_buf = string_to_c_buffer(schema)
+
+        write_usize(
+          pointer_offset(buf.pointer, CONFIG_OFFSET_SCHEMA_JSON),
+          pointer_to_int(schema_buf.pointer),
+        )
+
+        buffers.push(schema_buf)
+      }
+      case None -> {
+        # schema_json is NULL (0) to use default email schema
+        write_usize(pointer_offset(buf.pointer, CONFIG_OFFSET_SCHEMA_JSON), 0)
+      }
+    }
+
+    (buf, buffers)
+  }
+}

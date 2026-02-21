@@ -6,6 +6,7 @@
 # These tests verify the security limits defined in lib.rs:32-35
 
 import helpers (cleanup_test_index, ffi_available, temp_index_path)
+import std.string (StringBuffer)
 import std.test (Tests)
 import tantivy.index_manager (TantivyIndexManager)
 import tantivy.types (TantivyConfig)
@@ -110,13 +111,28 @@ fn pub tests(t: mut Tests) {
     match manager.open {
       case Ok(_) -> {
         # Create a 10MB field value (MAX_FIELD_VALUE_LENGTH)
-        let mut large_value = ''
-        let mut i = 0
+        # Use StringBuffer with chunking for O(n) allocation instead of O(n²) string concat
+        let chunk = {
+          let mut chunk_buf = StringBuffer.new
+          let mut i = 0
 
-        while i < 10_000_000 {
-          large_value = large_value + 'x'
-          i = i + 1
+          while i < 100_000 {
+            chunk_buf.push('x')
+            i = i + 1
+          }
+
+          chunk_buf.into_string
         }
+
+        let mut buffer = StringBuffer.new
+        let mut j = 0
+
+        while j < 100 {
+          buffer.push(chunk)
+          j = j + 1
+        }
+
+        let large_value = buffer.into_string
 
         let fields = [('large_field', large_value)]
 
@@ -147,13 +163,30 @@ fn pub tests(t: mut Tests) {
     match manager.open {
       case Ok(_) -> {
         # Create a 10MB + 1 byte field value (MAX_FIELD_VALUE_LENGTH + 1)
-        let mut large_value = ''
-        let mut i = 0
+        # Use StringBuffer with chunking for O(n) allocation instead of O(n²) string concat
+        let chunk = {
+          let mut chunk_buf = StringBuffer.new
+          let mut i = 0
 
-        while i < 10_000_001 {
-          large_value = large_value + 'x'
-          i = i + 1
+          while i < 100_000 {
+            chunk_buf.push('x')
+            i = i + 1
+          }
+
+          chunk_buf.into_string
         }
+
+        let mut buffer = StringBuffer.new
+        let mut j = 0
+
+        while j < 100 {
+          buffer.push(chunk)
+          j = j + 1
+        }
+
+        buffer.push('x')
+
+        let large_value = buffer.into_string
 
         let fields = [('too_large_field', large_value)]
 

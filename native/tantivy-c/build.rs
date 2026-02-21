@@ -422,7 +422,7 @@ fn generate_struct_constants(
     writeln!(output, "let pub {} = {}", size_name, size).unwrap();
 
     for (field_name, offset) in fields {
-        let field_name_for_offset = map_field_name_for_offset(*field_name);
+        let field_name_for_offset = map_field_name_for_offset(field_name);
         let offset_name = format!(
             "{}_OFFSET_{}",
             struct_prefix,

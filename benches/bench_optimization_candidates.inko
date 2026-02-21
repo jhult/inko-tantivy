@@ -2,9 +2,10 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-import std.stdio (STDOUT)
+import std.stdio (Stdout)
 import std.time (Duration, Instant)
-import tantivy.index_manager (TantivyConfig, TantivyIndexManager)
+import tantivy.index_manager (TantivyIndexManager)
+import tantivy.types (TantivyConfig)
 
 # Benchmark statistics
 type BenchmarkStats {
@@ -40,6 +41,7 @@ impl BenchmarkStats {
     if @durations.size == 0 { return 0 }
 
     let mut sorted = @durations.clone
+
     sorted.sort
 
     let mid = sorted.size / 2
@@ -55,9 +57,11 @@ impl BenchmarkStats {
     if @durations.size == 0 { return 0 }
 
     let mut min = @durations.get(0).or_panic
+
     for d in @durations.iter {
       if d < min { min = d }
     }
+
     min
   }
 
@@ -65,67 +69,76 @@ impl BenchmarkStats {
     if @durations.size == 0 { return 0 }
 
     let mut max = @durations.get(0).or_panic
+
     for d in @durations.iter {
       if d > max { max = d }
     }
+
     max
   }
 
-  fn pub std_dev -> Int {
-    if @durations.size <= 1 { return 0 }
+  fn pub std_dev -> Float {
+    if @durations.size <= 1 { return 0.0 }
 
-    let mean = mean
-    let mut sum_diff_sq = 0
+    let mean_val = mean as Float
+    let mut sum_diff_sq = 0.0
 
     for d in @durations.iter {
-      let diff = d - mean
+      let diff = d as Float - mean_val
+
       sum_diff_sq = sum_diff_sq + (diff * diff)
     }
 
-    (sum_diff_sq / (@durations.size - 1)).sqrt.toInt
+    let variance = sum_diff_sq / (@durations.size - 1) as Float
+
+    variance.sqrt
   }
 
   fn pub format_results {
-    STDOUT.new.print("")
-    STDOUT.new.print(@name)
-    STDOUT.new.print("====================================")
-    STDOUT.new.print("Iterations: ${@iterations}")
-    STDOUT.new.print("Warmup runs: ${@warmup_runs}")
-    STDOUT.new.print("")
-    STDOUT.new.print("Latency (ns):")
-    STDOUT.new.print("  Mean:   ${mean}")
-    STDOUT.new.print("  Median: ${median}")
-    STDOUT.new.print("  Min:    ${min}")
-    STDOUT.new.print("  Max:    ${max}")
-    STDOUT.new.print("  Std Dev: ${std_dev}")
-    STDOUT.new.print("")
+    Stdout.new.print('')
+    Stdout.new.print(@name)
+    Stdout.new.print('====================================')
+    Stdout.new.print('Iterations: ${@iterations}')
+    Stdout.new.print('Warmup runs: ${@warmup_runs}')
+    Stdout.new.print('')
+    Stdout.new.print('Latency (ns):')
+    Stdout.new.print('  Mean:   ${mean}')
+    Stdout.new.print('  Median: ${median}')
+    Stdout.new.print('  Min:    ${min}')
+    Stdout.new.print('  Max:    ${max}')
+    Stdout.new.print('  Std Dev: ${std_dev}')
+    Stdout.new.print('')
   }
 }
 
 # Benchmark: string_to_c_buffer performance
 # This measures the impact of buffer allocation for FFI calls
-fn benchmark_string_conversion(iterations: Int = 1000, warmup: Int = 10) {
+fn benchmark_string_conversion(iterations: Int, warmup: Int) {
   let mut stats = BenchmarkStats.new(
-    "string_to_c_buffer (allocation impact)",
+    'string_to_c_buffer (allocation impact)',
     iterations,
     warmup,
   )
 
-  let test_string = "This is a test string with some length to measure allocation overhead"
+  let test_string = 'This is a test string with some length to measure allocation overhead'
 
   let mut i = 0
+
   while i < iterations + warmup {
-    let start = Instant.now
+    let start = Instant.new
 
     let _ = test_string.to_byte_array
     let _ = ByteArray.filled(with: 0, times: test_string.size + 1)
 
-    let duration = Instant.now - start
+    let duration = start.elapsed.to_nanos
 
     if i >= warmup {
       let mut durations = stats.durations
+
       durations.push(duration)
+
       let mut total = stats.total_duration_ns
+
       total = total + duration
       stats = BenchmarkStats(
         name: stats.name,
@@ -144,9 +157,9 @@ fn benchmark_string_conversion(iterations: Int = 1000, warmup: Int = 10) {
 
 # Benchmark: batch document indexing performance
 # This measures the impact of buffer allocation on batch operations
-fn benchmark_batch_indexing(iterations: Int = 100, warmup: Int = 10) {
+fn benchmark_batch_indexing(iterations: Int, warmup: Int) {
   let mut stats = BenchmarkStats.new(
-    "Batch indexing (100 docs x 10 fields)",
+    'Batch indexing (100 docs x 10 fields)',
     iterations,
     warmup,
   )
@@ -154,6 +167,7 @@ fn benchmark_batch_indexing(iterations: Int = 100, warmup: Int = 10) {
   let test_index_path = '/tmp/bench-index'
 
   let mut i = 0
+
   while i < iterations + warmup {
     # Clean up from previous iteration
     match TantivyConfig.new(test_index_path) {
@@ -162,16 +176,18 @@ fn benchmark_batch_indexing(iterations: Int = 100, warmup: Int = 10) {
 
         match manager.open {
           case Ok(_) -> {
-            let start = Instant.now
+            let start = Instant.new
 
             let mut j = 0
+
             while j < 100 {
-              let doc_id = "doc-${i}-${j}"
+              let doc_id = 'doc-${i}-${j}'
 
               let mut fields = []
               let mut k = 0
+
               while k < 10 {
-                fields.push(("field_${k}", "value_${i}_${j}_${k}"))
+                fields.push(('field_${k}', 'value_${i}_${j}_${k}'))
                 k = k + 1
               }
 
@@ -183,12 +199,15 @@ fn benchmark_batch_indexing(iterations: Int = 100, warmup: Int = 10) {
               j = j + 1
             }
 
-            let duration = Instant.now - start
+            let duration = start.elapsed.to_nanos
 
             if i >= warmup {
               let mut durations = stats.durations
+
               durations.push(duration)
+
               let mut total = stats.total_duration_ns
+
               total = total + duration
               stats = BenchmarkStats(
                 name: stats.name,
@@ -215,15 +234,15 @@ fn benchmark_batch_indexing(iterations: Int = 100, warmup: Int = 10) {
 
 # Benchmark: search performance with different result sizes
 # This measures the impact of reading all results vs streaming
-fn benchmark_search_result_sizes(iterations: Int = 100, warmup: Int = 10) {
+fn benchmark_search_result_sizes(iterations: Int, warmup: Int) {
   let mut stats_small = BenchmarkStats.new(
-    "Search (10 results)",
+    'Search (10 results)',
     iterations,
     warmup,
   )
 
   let mut stats_large = BenchmarkStats.new(
-    "Search (1000 results)",
+    'Search (1000 results)',
     iterations,
     warmup,
   )
@@ -231,25 +250,29 @@ fn benchmark_search_result_sizes(iterations: Int = 100, warmup: Int = 10) {
   let test_index_path = '/tmp/bench-index'
 
   let mut i = 0
+
   while i < iterations + warmup {
     match TantivyConfig.new(test_index_path) {
       case Ok(config) -> {
         let mut manager = TantivyIndexManager.new(config)
 
         match manager.open {
-          case Ok(_) => {
-            let start_small = Instant.now
-            let _ = manager.search("test", 10, 0)
-            let duration_small = Instant.now - start_small
+          case Ok(_) -> {
+            let start_small = Instant.new
+            let _ = manager.search('test', 10, 0)
+            let duration_small = start_small.elapsed.to_nanos
 
-            let start_large = Instant.now
-            let _ = manager.search("test", 1000, 0)
-            let duration_large = Instant.now - start_large
+            let start_large = Instant.new
+            let _ = manager.search('test', 1000, 0)
+            let duration_large = start_large.elapsed.to_nanos
 
             if i >= warmup {
               let mut durations_small = stats_small.durations
+
               durations_small.push(duration_small)
+
               let mut total_small = stats_small.total_duration_ns
+
               total_small = total_small + duration_small
               stats_small = BenchmarkStats(
                 name: stats_small.name,
@@ -260,8 +283,11 @@ fn benchmark_search_result_sizes(iterations: Int = 100, warmup: Int = 10) {
               )
 
               let mut durations_large = stats_large.durations
+
               durations_large.push(duration_large)
+
               let mut total_large = stats_large.total_duration_ns
+
               total_large = total_large + duration_large
               stats_large = BenchmarkStats(
                 name: stats_large.name,
@@ -274,10 +300,10 @@ fn benchmark_search_result_sizes(iterations: Int = 100, warmup: Int = 10) {
 
             let _ = manager.close
           }
-          case Error(_) => {}
+          case Error(_) -> {}
         }
       }
-      case Error(_) => {}
+      case Error(_) -> {}
     }
 
     i = i + 1
@@ -288,16 +314,16 @@ fn benchmark_search_result_sizes(iterations: Int = 100, warmup: Int = 10) {
 }
 
 fn pub main {
-  STDOUT.new.print("Inko-Tantivy Performance Benchmarks")
-  STDOUT.new.print("====================================")
-  STDOUT.new.print("")
+  Stdout.new.print('Inko-Tantivy Performance Benchmarks')
+  Stdout.new.print('====================================')
+  Stdout.new.print('')
 
-  benchmark_string_conversion
-  STDOUT.new.print("")
+  benchmark_string_conversion(1000, 10)
+  Stdout.new.print('')
 
-  benchmark_batch_indexing
-  STDOUT.new.print("")
+  benchmark_batch_indexing(100, 10)
+  Stdout.new.print('')
 
-  benchmark_search_result_sizes
-  STDOUT.new.print("")
+  benchmark_search_result_sizes(100, 10)
+  Stdout.new.print('')
 }

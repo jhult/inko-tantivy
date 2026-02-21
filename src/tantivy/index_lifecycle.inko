@@ -7,63 +7,13 @@
 # This module handles index lifecycle operations: opening, closing, committing,
 # and rolling back the Tantivy index.
 
-import input_validation
 import pointer_helpers (is_null)
 import tantivy.ffi (
-  CONFIG_OFFSET_READER_MEMORY,
-  CONFIG_OFFSET_SCHEMA_JSON,
-  CONFIG_OFFSET_THREADS,
-  CONFIG_OFFSET_WRITER_MEMORY,
-  CONFIG_SIZE,
-  tantivy_index_close,
-  tantivy_index_commit,
-  tantivy_index_open,
+  tantivy_index_close, tantivy_index_commit, tantivy_index_open,
   tantivy_index_rollback,
 )
-import tantivy.marshal (
-  allocate_and_init_error,
-  check_ffi_error,
-)
-import tantivy.index_manager (TantivyConfig)
-import pointer_helpers (pointer_offset, write_usize)
-
-# Helper: Convert TantivyConfig to C struct for FFI
-fn config_to_c_struct(config: ref TantivyConfig) -> (ByteArray, Array[ByteArray]) {
-  let buf = ByteArray.filled(with: 0, times: CONFIG_SIZE)
-  let mut buffers = []
-
-  write_usize(pointer_offset(buf.pointer, 0), config.index_path.pointer as Int)
-
-  write_usize(
-    pointer_offset(buf.pointer, CONFIG_OFFSET_READER_MEMORY),
-    config.reader_memory_budget_bytes as Int,
-  )
-
-  write_usize(
-    pointer_offset(buf.pointer, CONFIG_OFFSET_WRITER_MEMORY),
-    config.writer_memory_budget_bytes as Int,
-  )
-
-  write_usize(
-    pointer_offset(buf.pointer, CONFIG_OFFSET_THREADS),
-    config.num_threads as Int,
-  )
-
-  match config.schema_json {
-    case Some(schema_json) -> {
-      buffers.push(schema_json)
-      write_usize(
-        pointer_offset(buf.pointer, CONFIG_OFFSET_SCHEMA_JSON),
-        schema_json.pointer as Int,
-      )
-    }
-    case None -> {
-      write_usize(pointer_offset(buf.pointer, CONFIG_OFFSET_SCHEMA_JSON), 0)
-    }
-  }
-
-  (buf, buffers)
-}
+import tantivy.marshal (allocate_and_init_error, check_ffi_error)
+import tantivy.types (TantivyConfig)
 
 # Index lifecycle manager
 type pub TantivyIndexLifecycle {
@@ -78,7 +28,7 @@ impl TantivyIndexLifecycle {
 
   # Open or create Tantivy index
   fn pub mut open -> Result[Bool, String] {
-    let (c_config, _buffers) = config_to_c_struct(@config)
+    let (c_config, _buffers) = @config.to_c_struct
 
     let (_error_out_storage, error_out_ptr) = allocate_and_init_error
 
@@ -206,7 +156,10 @@ impl TantivyIndexLifecycle {
 
   # Get the raw index pointer for FFI operations
   fn pub mut index_ptr -> Option[Pointer[UInt8]] {
-    @index
+    match @index {
+      case Some(idx) -> Option.Some(idx)
+      case None -> Option.None
+    }
   }
 
   # Get the index config

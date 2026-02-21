@@ -227,6 +227,16 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-build-target-
 
+      - name: Run cargo test
+        working-directory: native/tantivy-c
+        run: |
+          cargo test --target ${{ matrix.target }}
+
+      - name: Run cargo clippy
+        working-directory: native/tantivy-c
+        run: |
+          cargo clippy --target ${{ matrix.target }} -- -D warnings
+
       - name: Build Rust cdylib
         working-directory: native/tantivy-c
         run: |

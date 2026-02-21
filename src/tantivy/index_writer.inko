@@ -4,253 +4,252 @@
 
 # Tantivy index writer operations
 #
-# This module handles document write operations: adding and deleting documents
-# from the Tantivy index.
+# This module provides module-level functions for document write operations:
+# adding and deleting documents from the Tantivy index. Functions take a raw
+# index pointer and are called by the TantivyIndexManager facade.
 
-import input_validation
+import pointer_helpers (pointer_to_int, write_usize)
+import std.bytes (ByteArray)
 import tantivy.ffi (
-  FIELD_OFFSET_VALUE,
-  FIELD_SIZE,
-  tantivy_index_add_doc,
-  tantivy_index_add_docs_batch,
-  tantivy_index_delete_doc,
-  tantivy_index_delete_docs,
-  tantivy_index_get_docs,
+  FIELD_SIZE, tantivy_index_add_doc, tantivy_index_add_docs_batch,
+  tantivy_index_delete_doc, tantivy_index_delete_docs,
 )
 import tantivy.marshal (
-  allocate_and_init_error,
-  check_ffi_error,
-  create_field_array,
-  string_array_to_c_pointers,
-  string_to_c_buffer,
+  allocate_and_init_error, check_ffi_error, create_field_array,
+  string_array_to_c_pointers, string_to_c_buffer,
 )
-import tantivy.index_lifecycle (TantivyIndexLifecycle)
-import pointer_helpers (pointer_offset, pointer_to_int, read_usize, write_usize)
-import std.bytes (ByteArray)
 
-# Index writer for document operations
-type pub TantivyIndexWriter {
-  let mut @lifecycle: TantivyIndexLifecycle
+# Add or update a document in the index
+fn pub add_doc(
+  idx: Pointer[UInt8],
+  doc_id: String,
+  fields: Array[(String, String)],
+) -> Result[Bool, String] {
+  # Validate field names (values are validated in FFI layer)
+  for (field_name, _) in fields.iter {
+    if field_name.size == 0 {
+      return Result.Error('Field name cannot be empty')
+    }
+  }
+
+  # Convert doc_id to C string
+  let doc_id_buf = string_to_c_buffer(doc_id)
+
+  # Create field array
+  let field_count = fields.size
+  let (fields_buf, _strings) = create_field_array(fields)
+  let fields_ptr = fields_buf.pointer
+
+  let (_error_out_storage, error_out_ptr) = allocate_and_init_error
+
+  let result = tantivy_index_add_doc(
+    idx,
+    doc_id_buf.pointer,
+    fields_ptr,
+    field_count as Int64,
+    error_out_ptr as Pointer[UInt8],
+  )
+
+  match check_ffi_error(error_out_ptr) {
+    case Error(e) -> return Result.Error(e)
+    case Ok(_) -> {}
+  }
+
+  if (result as Int) == 0 {
+    Result.Ok(true)
+  } else {
+    Result.Error(
+      'Failed to index document with ID: "${doc_id}". '
+        + 'Possible causes: 1) Invalid field names, 2) Data exceeds buffer size, '
+        + '3) Duplicate document ID, 4) Schema mismatch. '
+        + 'Suggestions: Check field names match schema, reduce document size, '
+        + 'or verify document ID is unique.',
+    )
+  }
 }
 
-impl TantivyIndexWriter {
-  fn pub static new(lifecycle: TantivyIndexLifecycle) -> Self {
-    Self(lifecycle: lifecycle)
-  }
+# Add or update multiple documents in a batch (more efficient than individual add_doc calls)
+fn pub add_docs_batch(
+  idx: Pointer[UInt8],
+  docs: Array[(String, Array[(String, String)])],
+) -> Result[Int, String] {
+  # Calculate total size needed
+  let num_docs = docs.size
+  let mut total_fields = 0
 
-  # Add or update a document in the index
-  fn pub mut add_doc(
-    doc_id: String,
-    fields: Array[(String, String)],
-  ) -> Result[Bool, String] {
-    match @lifecycle.index_ptr {
-      case Some(idx) -> {
-        for (field_name, _) in fields.iter {
-          if field_name.size == 0 {
-            return Result.Error('Field name cannot be empty')
-          }
-        }
+  for (_, fields) in docs.iter { total_fields = total_fields + fields.size }
 
-        let doc_id_buf = string_to_c_buffer(doc_id)
+  # Allocate batch documents array
+  let docs_array_size = num_docs * 24
+  let docs_buf = ByteArray.filled(with: 0, times: docs_array_size)
+  let docs_ptr = docs_buf.pointer
 
-        let (fields_buf, _strings) = create_field_array(fields)
-        let fields_ptr = fields_buf.pointer
+  # Allocate fields array for all documents
+  let fields_array_size = total_fields * FIELD_SIZE
+  let fields_buf = ByteArray.filled(with: 0, times: fields_array_size)
+  let fields_ptr = fields_buf.pointer
 
-        let (_error_out_storage, error_out_ptr) = allocate_and_init_error
+  # Fill in batch documents
+  let mut doc_offset = 0
+  let mut field_offset = 0
+  let mut string_buffers = []
 
-        let result = tantivy_index_add_doc(
-          idx,
-          doc_id_buf.pointer,
-          fields_ptr,
-          fields.size as Int64,
-          error_out_ptr as Pointer[UInt8],
-        )
+  for (doc_id, fields) in docs.iter {
+    # Convert doc_id to C string and store pointer
+    let doc_id_buf = string_to_c_buffer(doc_id)
 
-        match check_ffi_error(error_out_ptr) {
-          case Error(e) -> return Result.Error(e)
-          case Ok(_) -> {}
-        }
+    # Write doc_id pointer to batch documents array
+    write_usize(
+      ((docs_ptr as Int) + doc_offset) as Pointer[UInt8],
+      pointer_to_int(doc_id_buf.pointer),
+    )
 
-        if (result as Int) == 0 {
-          Result.Ok(true)
-        } else {
-          Result.Error(
-            'Failed to index document with ID: "${doc_id}". '
-              + 'Possible causes: 1) Invalid field names, 2) Data exceeds buffer size, '
-              + '3) Duplicate document ID, 4) Schema mismatch. '
-              + 'Suggestions: Check field names match schema, reduce document size, '
-              + 'or verify document ID is unique.',
-          )
-        }
-      }
-      case None -> Result.Error('Index is not open')
+    string_buffers.push(doc_id_buf)
+
+    # Write fields pointer and count to batch documents array
+    let num_fields = fields.size
+
+    # Save starting offset for this document's fields
+    let doc_fields_start = field_offset
+
+    for (key, value) in fields.iter {
+      let key_buf = string_to_c_buffer(key)
+      let value_buf = string_to_c_buffer(value)
+
+      # Write key pointer to fields array
+      write_usize(
+        ((fields_ptr as Int) + field_offset) as Pointer[UInt8],
+        pointer_to_int(key_buf.pointer),
+      )
+
+      # Write value pointer to fields array
+      write_usize(
+        ((fields_ptr as Int) + field_offset + 8) as Pointer[UInt8],
+        pointer_to_int(value_buf.pointer),
+      )
+
+      field_offset = field_offset + FIELD_SIZE
+
+      string_buffers.push(key_buf)
+      string_buffers.push(value_buf)
     }
+
+    # Write fields pointer (at this document's starting offset) and count
+    write_usize(
+      ((docs_ptr as Int) + doc_offset + 8) as Pointer[UInt8],
+      ((fields_ptr as Int) + doc_fields_start) as Int,
+    )
+
+    write_usize(
+      ((docs_ptr as Int) + doc_offset + 16) as Pointer[UInt8],
+      num_fields as Int,
+    )
+
+    doc_offset = doc_offset + 24
   }
 
-  # Add or update multiple documents in a batch (more efficient than individual add_doc calls)
-  fn pub mut add_docs_batch(
-    docs: Array[(String, Array[(String, String)])],
-  ) -> Result[Int, String] {
-    match @lifecycle.index_ptr {
-      case Some(idx) -> {
-        let num_docs = docs.size
-        let mut total_fields = 0
+  let (_error_out_storage, error_out_ptr) = allocate_and_init_error
 
-        for (_, fields) in docs.iter {
-          total_fields = total_fields + fields.size
-        }
+  let result = tantivy_index_add_docs_batch(
+    idx,
+    docs_ptr,
+    num_docs as Int64,
+    error_out_ptr,
+  )
 
-        let docs_array_size = num_docs * 24
-        let docs_buf = ByteArray.filled(with: 0, times: docs_array_size)
-        let docs_ptr = docs_buf.pointer
+  match check_ffi_error(error_out_ptr) {
+    case Error(e) -> return Result.Error(e)
+    case Ok(_) -> {}
+  }
 
-        let fields_array_size = total_fields * FIELD_SIZE
-        let fields_buf = ByteArray.filled(with: 0, times: fields_array_size)
-        let fields_ptr = fields_buf.pointer
+  if (result as Int) >= 0 {
+    Result.Ok(result as Int)
+  } else {
+    Result.Error(
+      'Failed to add documents batch. '
+        + 'Possible causes: 1) Invalid field names in one or more documents, '
+        + '2) Data exceeds buffer size, 3) Duplicate document IDs, 4) Schema mismatch. '
+        + 'Suggestions: Check field names match schema, reduce document sizes, '
+        + 'or verify document IDs are unique.',
+    )
+  }
+}
 
-        let mut doc_offset = 0
-        let mut field_offset = 0
-        let mut string_buffers = []
+# Delete a document from the index
+fn pub delete_doc(idx: Pointer[UInt8], doc_id: String) -> Result[Bool, String] {
+  # Convert doc_id to C string
+  let doc_id_buf = string_to_c_buffer(doc_id)
 
-        for (doc_id, fields) in docs.iter {
-          let doc_id_buf = string_to_c_buffer(doc_id)
-          string_buffers.push(doc_id_buf)
+  let (_error_out_storage, error_out_ptr) = allocate_and_init_error
 
-          write_usize(pointer_offset(docs_ptr, doc_offset), pointer_to_int(doc_id_buf.pointer))
-          write_usize(pointer_offset(docs_ptr, doc_offset + 8), field_offset as Int)
-          write_usize(pointer_offset(docs_ptr, doc_offset + 16), fields.size as Int)
+  let result = tantivy_index_delete_doc(idx, doc_id_buf.pointer, error_out_ptr)
 
-          doc_offset = doc_offset + 24
+  match check_ffi_error(error_out_ptr) {
+    case Error(e) -> return Result.Error(e)
+    case Ok(_) -> {}
+  }
 
-          for (field_name, field_value) in fields {
-            let name_buf = string_to_c_buffer(field_name)
-            let value_buf = string_to_c_buffer(field_value)
-            string_buffers.push(name_buf)
-            string_buffers.push(value_buf)
+  if (result as Int) == 0 {
+    Result.Ok(true)
+  } else {
+    Result.Error(
+      'Failed to delete document with ID: "${doc_id}". '
+        + 'Possible causes: 1) Document ID does not exist, 2) Index is locked, '
+        + '3) Insufficient permissions. '
+        + 'Suggestions: Verify document ID exists, check if index is being modified, '
+        + 'or verify write permissions.',
+    )
+  }
+}
 
-            let base_offset = field_offset
-            write_usize(pointer_offset(fields_ptr, base_offset), pointer_to_int(name_buf.pointer))
-            write_usize(
-              pointer_offset(fields_ptr, base_offset + FIELD_OFFSET_VALUE),
-              pointer_to_int(value_buf.pointer),
-            )
+# Delete multiple documents from the index
+#
+# Uses batch delete FFI function for improved efficiency. The FFI function
+# still calls delete_term for each document internally, but this reduces
+# FFI round-trips compared to calling delete_doc for each document.
+fn pub delete_documents(
+  idx: Pointer[UInt8],
+  doc_ids: Array[String],
+) -> Result[Int, String] {
+  # Get array size before moving
+  let doc_ids_count = doc_ids.size
 
-            field_offset = field_offset + FIELD_SIZE
-          }
-        }
+  # Convert array of strings to array of C string pointers
+  # The _ctx keeps string buffers alive for the FFI call
+  let (c_strings, _ctx) = string_array_to_c_pointers(doc_ids)
 
-        let (_error_out_storage, error_out_ptr) = allocate_and_init_error
+  let (_error_out_storage, error_out_ptr) = allocate_and_init_error
 
-        let result = tantivy_index_add_docs_batch(
-          idx,
-          docs_ptr,
-          fields_ptr,
-          num_docs as Int64,
-          total_fields as Int64,
-          error_out_ptr,
-        )
+  # Call batch delete
+  let result = tantivy_index_delete_docs(
+    idx,
+    c_strings.pointer,
+    doc_ids_count as Int64,
+    error_out_ptr,
+  )
 
-        match check_ffi_error(error_out_ptr) {
-          case Error(e) -> return Result.Error(e)
-          case Ok(_) -> {}
-        }
-
-        if (result as Int) >= 0 {
-          Result.Ok(result as Int)
-        } else {
-          Result.Error(
-            'Failed to add batch of documents. '
-              + 'Possible causes: 1) Invalid field names, 2) Data exceeds buffer size, '
-              + '3) Duplicate document IDs, 4) Schema mismatch. '
-              + 'Suggestions: Check field names match schema, reduce document sizes, '
-              + 'or verify document IDs are unique.',
-          )
-        }
-      }
-      case None -> Result.Error('Index is not open')
+  # Check for errors
+  if (result as Int) == -1 {
+    # Error occurred - read error message
+    match check_ffi_error(error_out_ptr) {
+      case Error(e) -> Result.Error(e)
+      case Ok(_) -> Result.Error('Batch delete failed with unknown error')
     }
+  } else {
+    Result.Ok(result as Int)
   }
+}
 
-  # Delete a single document from the index
-  fn pub mut delete_doc(doc_id: String) -> Result[Bool, String] {
-    match @lifecycle.index_ptr {
-      case Some(idx) -> {
-        let doc_id_buf = string_to_c_buffer(doc_id)
+# Delete documents by account and folder (for IMAP sync)
+fn pub delete_by_account_folder(
+  idx: Pointer[UInt8],
+  account_id: String,
+  folder_name: String,
+  uids: Array[Int],
+) -> Result[Int, String] {
+  let mut doc_ids = []
 
-        let (_error_out_storage, error_out_ptr) = allocate_and_init_error
+  for uid in uids { doc_ids.push('${account_id}:${folder_name}:${uid}') }
 
-        let result = tantivy_index_delete_doc(
-          idx,
-          doc_id_buf.pointer,
-          error_out_ptr,
-        )
-
-        match check_ffi_error(error_out_ptr) {
-          case Error(e) -> return Result.Error(e)
-          case Ok(_) -> {}
-        }
-
-        if (result as Int) == 0 {
-          Result.Ok(true)
-        } else {
-          Result.Error(
-            'Failed to delete document with ID: "${doc_id}". '
-              + 'Possible causes: 1) Document ID does not exist, 2) Index is locked, '
-              + '3) Insufficient permissions. '
-              + 'Suggestions: Verify document ID exists, check if index is being modified, '
-              + 'or verify write permissions.',
-          )
-        }
-      }
-      case None -> Result.Error('Index is not open')
-    }
-  }
-
-  # Delete multiple documents from the index
-  fn pub mut delete_documents(doc_ids: Array[String]) -> Result[Int, String] {
-    match @lifecycle.index_ptr {
-      case None -> Result.Error('Index is not open')
-      case Some(idx) -> {
-        let doc_ids_count = doc_ids.size
-
-        let (c_strings, _ctx) = string_array_to_c_pointers(doc_ids)
-
-        let (_error_out_storage, error_out_ptr) = allocate_and_init_error
-
-        let result = tantivy_index_delete_docs(
-          idx,
-          c_strings.pointer,
-          doc_ids_count as Int64,
-          error_out_ptr,
-        )
-
-        if (result as Int) == -1 {
-          match check_ffi_error(error_out_ptr) {
-            case Error(e) -> Result.Error(e)
-            case Ok(_) -> Result.Error('Batch delete failed with unknown error')
-          }
-        } else {
-          Result.Ok(result as Int)
-        }
-      }
-    }
-  }
-
-  # Delete documents by account and folder (for IMAP sync)
-  fn pub mut delete_by_account_folder(
-    account_id: String,
-    folder_name: String,
-    uids: Array[Int],
-  ) -> Result[Int, String] {
-    let mut doc_ids = []
-
-    for uid in uids { doc_ids.push('${account_id}:${folder_name}:${uid}') }
-
-    self.delete_documents(doc_ids)
-  }
-
-  # Get access to the lifecycle for checking index state
-  fn pub mut lifecycle -> mut TantivyIndexLifecycle {
-    @lifecycle
-  }
+  delete_documents(idx, doc_ids)
 }

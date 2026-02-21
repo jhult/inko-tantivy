@@ -6,7 +6,8 @@
 
 import std.stdio (STDOUT)
 import std.time (Duration, Instant)
-import tantivy.index_manager (TantivyConfig, TantivyIndexManager)
+import tantivy.index_manager (TantivyIndexManager)
+import tantivy.types (TantivyConfig)
 
 # Benchmark statistics
 type BenchmarkStats {
@@ -44,6 +45,7 @@ impl BenchmarkStats {
     if @durations.size == 0 { return 0 }
 
     let mut sorted = @durations.clone
+
     sorted.sort
 
     let mid = sorted.size / 2
@@ -62,7 +64,9 @@ impl BenchmarkStats {
     if percent < 0 or percent > 100 { return mean }
 
     let mut sorted = @durations.clone
+
     sorted.sort
+
     let index = (percent * (sorted.size - 1)) / 100
 
     sorted.get(index).or_panic
@@ -155,8 +159,6 @@ impl BenchmarkStats {
     STDOUT.new.print('')
   }
 }
-
-
 
 # Quicksort implementation with in-place partitioning
 fn quicksort(arr: mut Array[Int], low: Int, high: Int) {

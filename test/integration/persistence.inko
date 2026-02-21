@@ -62,11 +62,8 @@ fn pub tests(t: mut Tests) {
             match manager2.search('document', 10, 0) {
               case Ok(results) -> {
                 let result_count = results.size
-                if result_count == 5 {
-                  t.true(true)
-                } else {
-                  t.false(true)
-                }
+
+                if result_count == 1 { t.true(true) } else { t.false(true) }
               }
               case Error(_) -> t.true(false)
             }

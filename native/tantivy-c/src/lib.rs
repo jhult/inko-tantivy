@@ -14,11 +14,14 @@
 // 4. Commit changes with tantivy_index_commit
 // 5. Close with tantivy_index_close
 
+#![allow(clippy::missing_safety_doc)]
+
 use libc::{c_char, c_int, size_t};
 use std::ffi::{CStr, CString};
 use std::mem::{self, offset_of, ManuallyDrop};
 use std::path::Path;
 use std::slice;
+use std::sync::LazyLock;
 use tantivy::{
     collector::TopDocs, query::QueryParser, schema::IndexRecordOption, schema::*, Index,
     IndexReader, IndexWriter, ReloadPolicy,
@@ -251,13 +254,13 @@ fn default_true() -> bool {
 }
 
 const MAX_SCHEMA_FIELDS: usize = 100;
-const FIELD_NAME_REGEX: &str = r"^[a-zA-Z_][a-zA-Z0-9_]*$";
+
+static FIELD_NAME_REGEX: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"^[a-zA-Z_][a-zA-Z0-9_]*$").expect("Invalid field name regex pattern")
+});
 
 fn validate_field_name(name: &str) -> Result<(), String> {
-    let re = regex::Regex::new(FIELD_NAME_REGEX)
-        .map_err(|e| format!("Invalid field name regex: {}", e))?;
-
-    if !re.is_match(name) {
+    if !FIELD_NAME_REGEX.is_match(name) {
         return Err(format!(
             "Invalid field name '{}': must start with a letter or underscore and contain only letters, numbers, and underscores",
             name
@@ -460,7 +463,11 @@ fn escape_query_string(s: &str) -> String {
 }
 
 // Helper: Sanitize error messages to remove filesystem paths
-fn sanitize_error_message(msg: &str) -> String {
+pub(crate) fn sanitize_error_message(msg: &str) -> String {
+    if !SANITIZE_ERRORS {
+        return msg.to_string();
+    }
+
     // Replace absolute paths with generic placeholders to prevent leaking filesystem structure
     let mut result = String::new();
     let mut chars = msg.chars().peekable();
@@ -500,13 +507,13 @@ fn sanitize_error_message(msg: &str) -> String {
 // Debug builds: No sanitization, full information available
 // Release builds: Sanitized for production security
 #[cfg(debug_assertions)]
-const SANITIZE_ERRORS: bool = false;
+pub(crate) const SANITIZE_ERRORS: bool = false;
 
 #[cfg(not(debug_assertions))]
-const SANITIZE_ERRORS: bool = true;
+pub(crate) const SANITIZE_ERRORS: bool = true;
 
 // Helper: Create error message C string with fallback
-fn create_error_string(msg: &str) -> *mut c_char {
+pub(crate) fn create_error_string(msg: &str) -> *mut c_char {
     // Always log full error to stderr for debugging (captured in logs/CI)
     eprintln!("[TANTIVY_ERROR] {}", msg);
 
@@ -674,18 +681,18 @@ pub unsafe extern "C" fn tantivy_index_open(
     // Create directory if it doesn't exist
     let path = Path::new(&index_path);
     if !path.exists() {
-        if let Err(e) = std::fs::create_dir_all(&path) {
+        if let Err(e) = std::fs::create_dir_all(path) {
             *error_out = create_error_string(&format!("Failed to create directory: {}", e));
             return std::ptr::null_mut();
         }
     }
 
     // Open or create index
-    let index = match Index::open_in_dir(&path) {
+    let index = match Index::open_in_dir(path) {
         Ok(idx) => idx,
         Err(_) => {
             // If opening failed, try creating a new index
-            match Index::create_in_dir(&path, schema.clone()) {
+            match Index::create_in_dir(path, schema.clone()) {
                 Ok(idx) => idx,
                 Err(e) => {
                     *error_out = create_error_string(&format!("Failed to create index: {}", e));
@@ -1161,21 +1168,21 @@ pub unsafe extern "C" fn tantivy_index_delete_docs(
         let doc_id_ptr = *doc_ids.add(i);
 
         if doc_id_ptr.is_null() {
-            error_count = error_count + 1;
+            error_count += 1;
             continue;
         }
 
         let doc_id_str = match c_str_to_string(doc_id_ptr) {
             Ok(id) => id,
             Err(_) => {
-                error_count = error_count + 1;
+                error_count += 1;
                 continue;
             }
         };
 
         let term = tantivy::Term::from_field_text(id_field, &doc_id_str);
         wrapper.writer.delete_term(term);
-        deleted_count = deleted_count + 1;
+        deleted_count += 1;
     }
 
     if error_count > 0 {
@@ -1656,9 +1663,8 @@ pub unsafe extern "C" fn tantivy_index_get_docs(
                 // Convert document to JSON map (without score)
                 let json_map = document_to_json_map(&retrieved_doc, &wrapper.schema, None);
 
-                match serde_json::to_string(&json_map) {
-                    Ok(j) => json_str = string_to_c_string(&j),
-                    Err(_) => {}
+                if let Ok(j) = serde_json::to_string(&json_map) {
+                    json_str = string_to_c_string(&j)
                 }
             }
         }
@@ -1710,7 +1716,7 @@ pub unsafe extern "C" fn tantivy_aggregate_terms(
     let wrapper = &*index;
 
     // Validate aggregation limit to prevent resource exhaustion
-    if limit > 0 && limit > MAX_SEARCH_LIMIT {
+    if limit > MAX_SEARCH_LIMIT {
         *error_out = create_error_string(&format!(
             "Aggregation limit too large: {} exceeds maximum of {}",
             limit, MAX_SEARCH_LIMIT
@@ -1924,7 +1930,7 @@ pub unsafe extern "C" fn tantivy_autocomplete(
     };
 
     let searcher = wrapper.reader.searcher();
-    let top_docs = match searcher.search(&prefix_query, &TopDocs::with_limit(limit as usize)) {
+    let top_docs = match searcher.search(&prefix_query, &TopDocs::with_limit(limit)) {
         Ok(docs) => docs,
         Err(e) => {
             *error_out = create_error_string(&format!("Autocomplete search failed: {}", e));
@@ -2027,7 +2033,7 @@ pub unsafe extern "C" fn tantivy_did_you_mean(
     let fuzzy_query = tantivy::query::FuzzyTermQuery::new(fuzzy_term, distance, true);
 
     let searcher = wrapper.reader.searcher();
-    let top_docs = match searcher.search(&fuzzy_query, &TopDocs::with_limit(limit as usize)) {
+    let top_docs = match searcher.search(&fuzzy_query, &TopDocs::with_limit(limit)) {
         Ok(docs) => docs,
         Err(e) => {
             *error_out = create_error_string(&format!("Fuzzy search failed: {}", e));
@@ -2191,5 +2197,161 @@ mod tests {
         println!();
 
         println!("Pointer size (usize): {}", mem::size_of::<usize>());
+    }
+
+    #[test]
+    fn test_sanitize_error_message_simple_path() {
+        let msg = "Failed to open index at /var/lib/tantivy/index";
+        let sanitized = sanitize_error_message(msg);
+
+        #[cfg(debug_assertions)]
+        assert_eq!(sanitized, "Failed to open index at /var/lib/tantivy/index");
+
+        #[cfg(not(debug_assertions))]
+        assert_eq!(sanitized, "Failed to open index at <path>");
+    }
+
+    #[test]
+    fn test_sanitize_error_message_windows_path() {
+        let msg = "Error reading file at /home/user/tantivy/data/index";
+        let sanitized = sanitize_error_message(msg);
+
+        #[cfg(debug_assertions)]
+        assert_eq!(
+            sanitized,
+            "Error reading file at /home/user/tantivy/data/index"
+        );
+
+        #[cfg(not(debug_assertions))]
+        assert_eq!(sanitized, "Error reading file at <path>");
+    }
+
+    #[test]
+    fn test_sanitize_error_message_multiple_paths() {
+        let msg = "Index at /var/lib/tantivy/index failed, trying /tmp/backup";
+        let sanitized = sanitize_error_message(msg);
+
+        #[cfg(debug_assertions)]
+        assert_eq!(
+            sanitized,
+            "Index at /var/lib/tantivy/index failed, trying /tmp/backup"
+        );
+
+        #[cfg(not(debug_assertions))]
+        assert_eq!(sanitized, "Index at <path> failed, trying <path>");
+    }
+
+    #[test]
+    fn test_sanitize_error_message_no_path() {
+        let msg = "Invalid configuration provided";
+        let sanitized = sanitize_error_message(msg);
+
+        assert_eq!(sanitized, "Invalid configuration provided");
+    }
+
+    #[test]
+    fn test_sanitize_error_message_empty_path() {
+        let msg = "Error at / with no directory";
+        let sanitized = sanitize_error_message(msg);
+
+        #[cfg(debug_assertions)]
+        assert_eq!(sanitized, "Error at / with no directory");
+
+        #[cfg(not(debug_assertions))]
+        assert_eq!(sanitized, "Error at / with no directory");
+    }
+
+    #[test]
+    fn test_sanitize_error_message_path_with_quotes() {
+        let msg = "Error at \"/var/lib/tantivy/index\"";
+        let sanitized = sanitize_error_message(msg);
+
+        #[cfg(debug_assertions)]
+        assert_eq!(sanitized, "Error at \"/var/lib/tantivy/index\"");
+
+        #[cfg(not(debug_assertions))]
+        assert_eq!(sanitized, "Error at \"<path>\"");
+    }
+
+    #[test]
+    fn test_sanitize_error_message_path_with_colon() {
+        let msg = "Failed at /path/to/index: Error occurred";
+        let sanitized = sanitize_error_message(msg);
+
+        #[cfg(debug_assertions)]
+        assert_eq!(sanitized, "Failed at /path/to/index: Error occurred");
+
+        #[cfg(not(debug_assertions))]
+        assert_eq!(sanitized, "Failed at <path>: Error occurred");
+    }
+
+    #[test]
+    fn test_sanitize_error_message_with_whitespace() {
+        let msg = "Error at /var/lib/tantivy/index space after path";
+        let sanitized = sanitize_error_message(msg);
+
+        #[cfg(debug_assertions)]
+        assert_eq!(
+            sanitized,
+            "Error at /var/lib/tantivy/index space after path"
+        );
+
+        #[cfg(not(debug_assertions))]
+        assert_eq!(sanitized, "Error at <path> space after path");
+    }
+
+    #[test]
+    fn test_sanitize_error_message_no_leading_slash() {
+        let msg = "Error: could not open path relative/path/index";
+        let sanitized = sanitize_error_message(msg);
+
+        assert_eq!(sanitized, "Error: could not open path relative/path/index");
+    }
+
+    #[test]
+    fn test_sanitize_flag_debug_builds() {
+        #[cfg(debug_assertions)]
+        assert!(!SANITIZE_ERRORS, "Debug builds should not sanitize errors");
+
+        #[cfg(not(debug_assertions))]
+        assert!(SANITIZE_ERRORS, "Release builds should sanitize errors");
+    }
+
+    #[test]
+    fn test_create_error_string_logs_to_stderr() {
+        let _ = create_error_string("Test error message");
+    }
+
+    #[test]
+    fn test_sanitize_preserves_non_path_content() {
+        let msg = "Failed to open index at /var/lib/tantivy/index: Permission denied";
+        let sanitized = sanitize_error_message(msg);
+
+        #[cfg(debug_assertions)]
+        assert_eq!(
+            sanitized,
+            "Failed to open index at /var/lib/tantivy/index: Permission denied"
+        );
+
+        #[cfg(not(debug_assertions))]
+        assert_eq!(
+            sanitized,
+            "Failed to open index at <path>: Permission denied"
+        );
+    }
+
+    #[test]
+    fn test_sanitize_with_deep_path() {
+        let msg = "Error at /usr/local/lib/tantivy/data/backup/index";
+        let sanitized = sanitize_error_message(msg);
+
+        #[cfg(debug_assertions)]
+        assert_eq!(
+            sanitized,
+            "Error at /usr/local/lib/tantivy/data/backup/index"
+        );
+
+        #[cfg(not(debug_assertions))]
+        assert_eq!(sanitized, "Error at <path>");
     }
 }
