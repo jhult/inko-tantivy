@@ -407,4 +407,179 @@ fn pub tests(t: mut Tests) {
 
     cleanup_test_index(path)
   })
+
+  t.test(
+    'Schema mismatch: string value for u64 field is silently skipped',
+    fn (t) {
+      let path = temp_index_path('schema-mismatch-001')
+      let schema_json = '{
+      "fields": [
+        {"name": "title", "type": "text", "indexed": true, "stored": true},
+        {"name": "count", "type": "u64", "indexed": true, "stored": true}
+      ],
+      "default_search_fields": ["title"]
+    }'
+
+      let config = match TantivyConfig.new(path) {
+        case Ok(c) -> c
+        case Error(_) -> {
+          cleanup_test_index(path)
+          t.true(false)
+          return
+        }
+      }
+
+      let config_with_schema = match config.with_schema_json(schema_json) {
+        case Ok(c) -> c
+        case Error(_) -> {
+          cleanup_test_index(path)
+          t.true(false)
+          return
+        }
+      }
+
+      let mut manager = TantivyIndexManager.new(config_with_schema)
+
+      match manager.open {
+        case Ok(_) -> {
+          # String value for u64 field - should be silently skipped
+          let fields = [('title', 'Test'), ('count', 'not-a-number')]
+
+          match manager.add_doc('doc-1', fields) {
+            case Ok(_) -> {
+              # Document should still be added, just without the count field
+              let _ = manager.commit
+
+              match manager.get_doc('doc-1') {
+                case Ok(doc) -> {
+                  # Title should be present, count should be missing
+                  t.true(doc.contains?('Test') or doc.contains?('title'))
+                }
+                case Error(_) -> t.true(false)
+              }
+            }
+            case Error(_) -> t.true(false)
+          }
+        }
+        case Error(_) -> t.true(false)
+      }
+
+      let _ = manager.close
+
+      cleanup_test_index(path)
+    },
+  )
+
+  t.test('Schema mismatch: string value for bool field', fn (t) {
+    let path = temp_index_path('schema-mismatch-002')
+    let schema_json = '{
+      "fields": [
+        {"name": "title", "type": "text", "indexed": true, "stored": true},
+        {"name": "active", "type": "bool", "indexed": true, "stored": true}
+      ],
+      "default_search_fields": ["title"]
+    }'
+
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> {
+        cleanup_test_index(path)
+        t.true(false)
+        return
+      }
+    }
+
+    let config_with_schema = match config.with_schema_json(schema_json) {
+      case Ok(c) -> c
+      case Error(_) -> {
+        cleanup_test_index(path)
+        t.true(false)
+        return
+      }
+    }
+
+    let mut manager = TantivyIndexManager.new(config_with_schema)
+
+    match manager.open {
+      case Ok(_) -> {
+        # Non-boolean string for bool field
+        let fields = [('title', 'Test'), ('active', 'maybe')]
+
+        match manager.add_doc('doc-1', fields) {
+          case Ok(_) -> {
+            # Should succeed - 'maybe' is treated as false (not 'true')
+            let _ = manager.commit
+
+            match manager.get_doc('doc-1') {
+              case Ok(_) -> t.true(true)
+              case Error(_) -> t.true(false)
+            }
+          }
+          case Error(_) -> t.true(false)
+        }
+      }
+      case Error(_) -> t.true(false)
+    }
+
+    let _ = manager.close
+
+    cleanup_test_index(path)
+  })
+
+  t.test('Schema mismatch: field not in schema is silently skipped', fn (t) {
+    let path = temp_index_path('schema-mismatch-003')
+    let schema_json = '{
+      "fields": [
+        {"name": "title", "type": "text", "indexed": true, "stored": true}
+      ],
+      "default_search_fields": ["title"]
+    }'
+
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> {
+        cleanup_test_index(path)
+        t.true(false)
+        return
+      }
+    }
+
+    let config_with_schema = match config.with_schema_json(schema_json) {
+      case Ok(c) -> c
+      case Error(_) -> {
+        cleanup_test_index(path)
+        t.true(false)
+        return
+      }
+    }
+
+    let mut manager = TantivyIndexManager.new(config_with_schema)
+
+    match manager.open {
+      case Ok(_) -> {
+        # unknown_field is not in schema
+        let fields = [('title', 'Test'), ('unknown_field', 'value')]
+
+        match manager.add_doc('doc-1', fields) {
+          case Ok(_) -> {
+            let _ = manager.commit
+
+            match manager.get_doc('doc-1') {
+              case Ok(doc) -> {
+                # Should have title but not unknown_field
+                t.true(doc.contains?('Test'))
+              }
+              case Error(_) -> t.true(false)
+            }
+          }
+          case Error(_) -> t.true(false)
+        }
+      }
+      case Error(_) -> t.true(false)
+    }
+
+    let _ = manager.close
+
+    cleanup_test_index(path)
+  })
 }

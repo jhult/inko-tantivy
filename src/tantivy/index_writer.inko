@@ -247,6 +247,24 @@ fn pub delete_by_account_folder(
   folder_name: String,
   uids: Array[Int],
 ) -> Result[Int, String] {
+  if account_id.size == 0 { return Result.Error('account_id cannot be empty') }
+
+  if folder_name.size == 0 {
+    return Result.Error('folder_name cannot be empty')
+  }
+
+  if account_id.contains?(':') {
+    return Result.Error('account_id cannot contain colon character')
+  }
+
+  if folder_name.contains?(':') {
+    return Result.Error('folder_name cannot contain colon character')
+  }
+
+  if uids.size > 10_000 {
+    return Result.Error('Too many UIDs: ${uids.size} exceeds maximum of 10,000')
+  }
+
   let mut doc_ids = []
 
   for uid in uids { doc_ids.push('${account_id}:${folder_name}:${uid}') }

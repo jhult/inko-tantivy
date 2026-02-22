@@ -84,6 +84,11 @@ fn escape_query_string(s: String) -> String {
   let result = result.replace('[', '\\[')
   let result = result.replace(']', '\\]')
   let result = result.replace(':', '\\:')
+  let result = result.replace('+', '\\+')
+  let result = result.replace('-', '\\-')
+  let result = result.replace('*', '\\*')
+  let result = result.replace('?', '\\?')
+  let result = result.replace(' ', '\\ ')
 
   result
 }

@@ -118,9 +118,9 @@ impl BenchmarkStats {
     sum_sq_diff / denom
   }
 
-  # Calculate standard deviation (use sqrt for now - may need external implementation)
+  # Calculate standard deviation
   fn pub std_dev -> Float {
-    variance
+    variance.sqrt
   }
 
   # Calculate min duration
