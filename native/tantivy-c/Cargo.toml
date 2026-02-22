@@ -6,6 +6,10 @@
 name = "tantivy-c"
 version = "0.1.0"
 edition = "2021"
+description = "C ABI wrapper around Tantivy for use from Inko via FFI"
+license = "MPL-2.0"
+repository = "https://github.com/jhult/inko-tantivy"
+authors = ["Jonathan Hult"]
 
 [lib]
 name = "tantivy_c"

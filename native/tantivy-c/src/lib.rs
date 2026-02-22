@@ -14,6 +14,10 @@
 // 4. Commit changes with tantivy_index_commit
 // 5. Close with tantivy_index_close
 
+// All extern "C" functions in this FFI layer are inherently unsafe due to
+// raw pointer handling. Each function includes detailed # Safety and
+// # Memory Ownership documentation. The clippy warning is suppressed to
+// avoid repetitive documentation since all functions share the same pattern.
 #![allow(clippy::missing_safety_doc)]
 
 use libc::{c_char, c_int, size_t};
@@ -38,6 +42,8 @@ const MAX_QUERY_LENGTH: usize = 10 * 1024; // 10KB query string
 const MAX_SEARCH_LIMIT: usize = 10000; // Maximum results per search
 
 // Opaque pointer types for FFI
+// The `index` field is required for Tantivy operations but is accessed via the cached query_parser
+#[allow(dead_code)]
 pub struct TantivyIndexWrapper {
     index: Index,
     reader: IndexReader,
@@ -447,12 +453,13 @@ fn string_to_c_string(s: &str) -> *mut c_char {
 }
 
 // Helper: Escape special characters in query strings to prevent injection (CWE-78)
-// Escapes: " ' + - ( ) : * ? \ and whitespace
+// Full list of Tantivy/Lucene special chars: " ' + - ( ) [ ] : * ? \ ^ ~ { } | ! and whitespace
 fn escape_query_string(s: &str) -> String {
     let mut result = String::with_capacity(s.len() * 2);
     for c in s.chars() {
         match c {
-            '"' | '\'' | '+' | '-' | '(' | ')' | ':' | '*' | '?' | '\\' | ' ' => {
+            '"' | '\'' | '+' | '-' | '(' | ')' | '[' | ']' | ':' | '*' | '?' | '\\' | ' ' | '^'
+            | '~' | '{' | '}' | '|' | '!' => {
                 result.push('\\');
                 result.push(c);
             }
@@ -893,21 +900,36 @@ pub unsafe extern "C" fn tantivy_index_add_doc(
                 FieldType::Str(_) => {
                     doc.add_text(field_entry, &value);
                 }
-                FieldType::U64(_) => {
-                    if let Ok(num) = value.parse::<u64>() {
-                        doc.add_u64(field_entry, num);
+                FieldType::U64(_) => match value.parse::<u64>() {
+                    Ok(num) => doc.add_u64(field_entry, num),
+                    Err(_) => {
+                        *error_out = create_error_string(&format!(
+                            "Field '{}' expects u64 but value '{}' is not a valid unsigned integer",
+                            key, value
+                        ));
+                        return -1;
                     }
-                }
-                FieldType::I64(_) => {
-                    if let Ok(num) = value.parse::<i64>() {
-                        doc.add_i64(field_entry, num);
+                },
+                FieldType::I64(_) => match value.parse::<i64>() {
+                    Ok(num) => doc.add_i64(field_entry, num),
+                    Err(_) => {
+                        *error_out = create_error_string(&format!(
+                            "Field '{}' expects i64 but value '{}' is not a valid signed integer",
+                            key, value
+                        ));
+                        return -1;
                     }
-                }
-                FieldType::F64(_) => {
-                    if let Ok(num) = value.parse::<f64>() {
-                        doc.add_f64(field_entry, num);
+                },
+                FieldType::F64(_) => match value.parse::<f64>() {
+                    Ok(num) => doc.add_f64(field_entry, num),
+                    Err(_) => {
+                        *error_out = create_error_string(&format!(
+                                "Field '{}' expects f64 but value '{}' is not a valid floating point number",
+                                key, value
+                            ));
+                        return -1;
                     }
-                }
+                },
                 FieldType::Bool(_) => {
                     let bool_val = value.to_lowercase() == "true";
                     doc.add_bool(field_entry, bool_val);
@@ -1030,21 +1052,36 @@ pub unsafe extern "C" fn tantivy_index_add_docs_batch(
                     FieldType::Str(_) => {
                         doc.add_text(field_entry, &value);
                     }
-                    FieldType::U64(_) => {
-                        if let Ok(num) = value.parse::<u64>() {
-                            doc.add_u64(field_entry, num);
+                    FieldType::U64(_) => match value.parse::<u64>() {
+                        Ok(num) => doc.add_u64(field_entry, num),
+                        Err(_) => {
+                            *error_out = create_error_string(&format!(
+                                    "Document {}: field '{}' expects u64 but value '{}' is not a valid unsigned integer",
+                                    added_count, key, value
+                                ));
+                            return added_count as c_int;
                         }
-                    }
-                    FieldType::I64(_) => {
-                        if let Ok(num) = value.parse::<i64>() {
-                            doc.add_i64(field_entry, num);
+                    },
+                    FieldType::I64(_) => match value.parse::<i64>() {
+                        Ok(num) => doc.add_i64(field_entry, num),
+                        Err(_) => {
+                            *error_out = create_error_string(&format!(
+                                    "Document {}: field '{}' expects i64 but value '{}' is not a valid signed integer",
+                                    added_count, key, value
+                                ));
+                            return added_count as c_int;
                         }
-                    }
-                    FieldType::F64(_) => {
-                        if let Ok(num) = value.parse::<f64>() {
-                            doc.add_f64(field_entry, num);
+                    },
+                    FieldType::F64(_) => match value.parse::<f64>() {
+                        Ok(num) => doc.add_f64(field_entry, num),
+                        Err(_) => {
+                            *error_out = create_error_string(&format!(
+                                    "Document {}: field '{}' expects f64 but value '{}' is not a valid floating point number",
+                                    added_count, key, value
+                                ));
+                            return added_count as c_int;
                         }
-                    }
+                    },
                     FieldType::Bool(_) => {
                         let bool_val = value.to_lowercase() == "true";
                         doc.add_bool(field_entry, bool_val);
@@ -1920,14 +1957,18 @@ pub unsafe extern "C" fn tantivy_autocomplete(
     // Use wildcard query for efficient prefix matching (better than exact TermQuery for autocomplete)
     // The wildcard character (*) is appended AFTER escaping to maintain prefix functionality
     let query_str = format!("{}:{}*", field_str, escaped_prefix);
-    let query_parser = QueryParser::for_index(&wrapper.index, vec![field_entry]);
-    let prefix_query = match query_parser.parse_query(&query_str) {
-        Ok(q) => q,
-        Err(e) => {
-            *error_out = create_error_string(&format!("Failed to parse prefix query: {}", e));
-            return -1;
-        }
-    };
+
+    // Use cached QueryParser with lenient parsing (supports field-specific queries)
+    let query_parser = &wrapper.query_parser;
+    let (prefix_query, errors) = query_parser.parse_query_lenient(&query_str);
+
+    // Log parse errors for debugging but continue with the partial query
+    if !errors.is_empty() {
+        eprintln!(
+            "Autocomplete parse warnings for '{}': {:?}",
+            query_str, errors
+        );
+    }
 
     let searcher = wrapper.reader.searcher();
     let top_docs = match searcher.search(&prefix_query, &TopDocs::with_limit(limit)) {

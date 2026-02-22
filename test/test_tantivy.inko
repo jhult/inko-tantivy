@@ -205,8 +205,9 @@ fn pub tests(t: mut Tests) {
 
     let query = builder.build
 
-    t.true(query.contains?('subject:hello world'))
-    t.true(query.contains?('body:email content'))
+    # Spaces in search text should be escaped
+    t.true(query.contains?('subject:hello\\ world'))
+    t.true(query.contains?('body:email\\ content'))
   })
 
   t.test('TantivyQueryBuilder with exact match', fn (t) {
@@ -236,7 +237,7 @@ fn pub tests(t: mut Tests) {
 
     let query = builder.build
 
-    t.true(query.contains?('account_id:user123'))
+    t.true(query.contains?('account_id:"user123"'))
   })
 
   t.test('TantivyQueryBuilder with NOT query', fn (t) {
@@ -279,7 +280,7 @@ fn pub tests(t: mut Tests) {
     let query = builder.build
 
     t.true(query.contains?('subject:important'))
-    t.true(query.contains?('status:unread'))
+    t.true(query.contains?('status:"unread"'))
     t.true(query.contains?('date:[2023 TO 2024]'))
   })
 
@@ -341,11 +342,11 @@ fn pub tests(t: mut Tests) {
     let query = builder.build
 
     # Verify that special characters are properly escaped
-    # The input 'test: "value" AND (foo OR bar)' should be escaped to:
-    # 'test: \"value\" AND \(foo OR bar\)'
-    # Quotes and parentheses are escaped, but colons are not
-    t.true(query.contains?('test: \\"value\\"'))
-    t.true(query.contains?('\\(foo OR bar\\)'))
+    # Colons, quotes, parentheses, and spaces are all escaped for security
+    t.true(query.contains?('test\\:'))
+    t.true(query.contains?('\\"value\\"'))
+    t.true(query.contains?('\\(foo'))
+    t.true(query.contains?('bar\\)'))
   })
 
   t.test('TantivyQueryBuilder handles backslashes', fn (t) {

@@ -484,4 +484,161 @@ fn pub tests(t: mut Tests) {
 
     cleanup_test_index(path)
   })
+
+  # Test delete_by_account_folder with invalid inputs
+  t.test('delete_by_account_folder rejects empty account_id', fn (t) {
+    let path = temp_index_path('edge-delete-invalid-account')
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> {
+        cleanup_test_index(path)
+        return
+      }
+    }
+    let mut manager = TantivyIndexManager.new(config)
+
+    match manager.open {
+      case Ok(_) -> {
+        match manager.delete_by_account_folder('', 'folder1', [1, 2, 3]) {
+          case Ok(_) -> {
+            let _ = manager.close
+
+            cleanup_test_index(path)
+            t.true(false)
+          }
+          case Error(e) -> {
+            t.true(e.contains?('account_id') or e.contains?('empty'))
+
+            let _ = manager.close
+
+            cleanup_test_index(path)
+          }
+        }
+      }
+      case Error(_) -> {
+        let _ = manager.close
+
+        cleanup_test_index(path)
+        t.true(false)
+      }
+    }
+  })
+
+  t.test('delete_by_account_folder rejects empty folder_name', fn (t) {
+    let path = temp_index_path('edge-delete-invalid-folder')
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> {
+        cleanup_test_index(path)
+        return
+      }
+    }
+    let mut manager = TantivyIndexManager.new(config)
+
+    match manager.open {
+      case Ok(_) -> {
+        match manager.delete_by_account_folder('account1', '', [1, 2, 3]) {
+          case Ok(_) -> {
+            let _ = manager.close
+
+            cleanup_test_index(path)
+            t.true(false)
+          }
+          case Error(e) -> {
+            t.true(e.contains?('folder_name') or e.contains?('empty'))
+
+            let _ = manager.close
+
+            cleanup_test_index(path)
+          }
+        }
+      }
+      case Error(_) -> {
+        let _ = manager.close
+
+        cleanup_test_index(path)
+        t.true(false)
+      }
+    }
+  })
+
+  t.test('delete_by_account_folder rejects colon in account_id', fn (t) {
+    let path = temp_index_path('edge-delete-colon-account')
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> {
+        cleanup_test_index(path)
+        return
+      }
+    }
+    let mut manager = TantivyIndexManager.new(config)
+
+    match manager.open {
+      case Ok(_) -> {
+        match
+          manager.delete_by_account_folder('account:1', 'folder1', [1, 2, 3])
+        {
+          case Ok(_) -> {
+            let _ = manager.close
+
+            cleanup_test_index(path)
+            t.true(false)
+          }
+          case Error(e) -> {
+            t.true(e.contains?('colon') or e.contains?(':'))
+
+            let _ = manager.close
+
+            cleanup_test_index(path)
+          }
+        }
+      }
+      case Error(_) -> {
+        let _ = manager.close
+
+        cleanup_test_index(path)
+        t.true(false)
+      }
+    }
+  })
+
+  t.test('delete_by_account_folder rejects colon in folder_name', fn (t) {
+    let path = temp_index_path('edge-delete-colon-folder')
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> {
+        cleanup_test_index(path)
+        return
+      }
+    }
+    let mut manager = TantivyIndexManager.new(config)
+
+    match manager.open {
+      case Ok(_) -> {
+        match
+          manager.delete_by_account_folder('account1', 'folder:1', [1, 2, 3])
+        {
+          case Ok(_) -> {
+            let _ = manager.close
+
+            cleanup_test_index(path)
+            t.true(false)
+          }
+          case Error(e) -> {
+            t.true(e.contains?('colon') or e.contains?(':'))
+
+            let _ = manager.close
+
+            cleanup_test_index(path)
+          }
+        }
+      }
+      case Error(_) -> {
+        let _ = manager.close
+
+        cleanup_test_index(path)
+        t.true(false)
+      }
+    }
+  })
 }
