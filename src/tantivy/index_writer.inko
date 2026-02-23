@@ -230,13 +230,17 @@ fn pub delete_documents(
 
   # Check for errors
   if (result as Int) == -1 {
-    # Error occurred - read error message
+    # Total failure - read error message
     match check_ffi_error(error_out_ptr) {
       case Error(e) -> Result.Error(e)
       case Ok(_) -> Result.Error('Batch delete failed with unknown error')
     }
   } else {
-    Result.Ok(result as Int)
+    # Check for partial failures (error_out set even on non--1 result)
+    match check_ffi_error(error_out_ptr) {
+      case Error(e) -> Result.Error('${e} (deleted ${result as Int} documents)')
+      case Ok(_) -> Result.Ok(result as Int)
+    }
   }
 }
 
