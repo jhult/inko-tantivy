@@ -2,6 +2,15 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+# IMPORTANT: These constants must match the values in native/tantivy-c/src/lib.rs
+# When modifying these, update the corresponding Rust constants.
+#
+# Rust values (for reference):
+# - MAX_FIELDS_PER_DOCUMENT = 1000
+# - MAX_FIELD_VALUE_LENGTH = 10 * 1024 * 1024 (10MB)
+# - MAX_QUERY_LENGTH = 10 * 1024 (10KB)
+# - MAX_SEARCH_LIMIT = 10000
+
 # Maximum document ID length to prevent excessive memory usage
 let pub MAX_DOC_ID_LENGTH = 1024
 
@@ -12,8 +21,9 @@ let pub MAX_FIELD_NAME_LENGTH = 256
 # Must match MAX_FIELD_VALUE_LENGTH in native/tantivy-c/src/lib.rs
 let pub MAX_FIELD_VALUE_LENGTH = 10_485_760
 
-# Maximum query string length
-let pub MAX_QUERY_LENGTH = 8192
+# Maximum query string length (10KB)
+# Must match MAX_QUERY_LENGTH in native/tantivy-c/src/lib.rs
+let pub MAX_QUERY_LENGTH = 10_240
 
 # Helper: Check if byte is a letter (a-z or A-Z)
 fn is_letter_byte(byte: Int) -> Bool {
