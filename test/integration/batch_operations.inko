@@ -148,10 +148,6 @@ fn pub tests(t: mut Tests) {
         let _ = manager.close
 
         cleanup_test_index(path)
-
-        let _ = manager.close
-
-        cleanup_test_index(path)
         return
       }
     }
@@ -232,10 +228,6 @@ fn pub tests(t: mut Tests) {
             let _ = manager.close
 
             cleanup_test_index(path)
-
-            let _ = manager.close
-
-            cleanup_test_index(path)
             return
           }
         }
@@ -244,10 +236,6 @@ fn pub tests(t: mut Tests) {
           case Ok(_) -> {}
           case Error(_) -> {
             t.true(false)
-
-            let _ = manager.close
-
-            cleanup_test_index(path)
 
             let _ = manager.close
 
