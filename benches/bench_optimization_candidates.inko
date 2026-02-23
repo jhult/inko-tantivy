@@ -2,117 +2,12 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+import benchmark_stats (BenchmarkStats)
 import std.stdio (Stdout)
 import std.time (Duration, Instant)
 import tantivy.index_manager (TantivyIndexManager)
 import tantivy.types (TantivyConfig)
 
-# Benchmark statistics
-type BenchmarkStats {
-  let @name: String
-  let @iterations: Int
-  let @warmup_runs: Int
-  let @total_duration_ns: Int
-  let @durations: Array[Int]
-}
-
-impl BenchmarkStats {
-  fn pub static new(
-    name: String,
-    iterations: Int,
-    warmup_runs: Int,
-  ) -> BenchmarkStats {
-    BenchmarkStats(
-      name: name,
-      iterations: iterations,
-      warmup_runs: warmup_runs,
-      total_duration_ns: 0,
-      durations: [],
-    )
-  }
-
-  fn pub mean -> Int {
-    if @durations.size == 0 { return 0 }
-
-    @total_duration_ns / @durations.size
-  }
-
-  fn pub median -> Int {
-    if @durations.size == 0 { return 0 }
-
-    let mut sorted = @durations.clone
-
-    sorted.sort
-
-    let mid = sorted.size / 2
-
-    if sorted.size % 2 == 0 {
-      (sorted.get(mid).or_panic + sorted.get(mid - 1).or_panic) / 2
-    } else {
-      sorted.get(mid).or_panic
-    }
-  }
-
-  fn pub min -> Int {
-    if @durations.size == 0 { return 0 }
-
-    let mut min = @durations.get(0).or_panic
-
-    for d in @durations.iter {
-      if d < min { min = d }
-    }
-
-    min
-  }
-
-  fn pub max -> Int {
-    if @durations.size == 0 { return 0 }
-
-    let mut max = @durations.get(0).or_panic
-
-    for d in @durations.iter {
-      if d > max { max = d }
-    }
-
-    max
-  }
-
-  fn pub std_dev -> Float {
-    if @durations.size <= 1 { return 0.0 }
-
-    let mean_val = mean as Float
-    let mut sum_diff_sq = 0.0
-
-    for d in @durations.iter {
-      let diff = d as Float - mean_val
-
-      sum_diff_sq = sum_diff_sq + (diff * diff)
-    }
-
-    let variance = sum_diff_sq / (@durations.size - 1) as Float
-
-    variance.sqrt
-  }
-
-  fn pub format_results {
-    Stdout.new.print('')
-    Stdout.new.print(@name)
-    Stdout.new.print('====================================')
-    Stdout.new.print('Iterations: ${@iterations}')
-    Stdout.new.print('Warmup runs: ${@warmup_runs}')
-    Stdout.new.print('')
-    Stdout.new.print('Latency (ns):')
-    Stdout.new.print('  Mean:   ${mean}')
-    Stdout.new.print('  Median: ${median}')
-    Stdout.new.print('  Min:    ${min}')
-    Stdout.new.print('  Max:    ${max}')
-    Stdout.new.print('  Std Dev: ${std_dev}')
-    Stdout.new.print('')
-  }
-}
-
-# Benchmark: string_to_c_buffer performance
-# This measures the impact of buffer allocation for FFI calls
 fn benchmark_string_conversion(iterations: Int, warmup: Int) {
   let mut stats = BenchmarkStats.new(
     'string_to_c_buffer (allocation impact)',
@@ -152,11 +47,21 @@ fn benchmark_string_conversion(iterations: Int, warmup: Int) {
     i = i + 1
   }
 
-  stats.format_results
+  Stdout.new.print('')
+  Stdout.new.print(stats.name)
+  Stdout.new.print('====================================')
+  Stdout.new.print('Iterations: ${stats.iterations}')
+  Stdout.new.print('Warmup runs: ${stats.warmup_runs}')
+  Stdout.new.print('')
+  Stdout.new.print('Latency (ns):')
+  Stdout.new.print('  Mean:   ${stats.mean}')
+  Stdout.new.print('  Median: ${stats.median}')
+  Stdout.new.print('  Min:    ${stats.min}')
+  Stdout.new.print('  Max:    ${stats.max}')
+  Stdout.new.print('  Std Dev: ${stats.std_dev}')
+  Stdout.new.print('')
 }
 
-# Benchmark: batch document indexing performance
-# This measures the impact of buffer allocation on batch operations
 fn benchmark_batch_indexing(iterations: Int, warmup: Int) {
   let mut stats = BenchmarkStats.new(
     'Batch indexing (100 docs x 10 fields)',
@@ -169,7 +74,6 @@ fn benchmark_batch_indexing(iterations: Int, warmup: Int) {
   let mut i = 0
 
   while i < iterations + warmup {
-    # Clean up from previous iteration
     match TantivyConfig.new(test_index_path) {
       case Ok(config) -> {
         let mut manager = TantivyIndexManager.new(config)
@@ -229,11 +133,21 @@ fn benchmark_batch_indexing(iterations: Int, warmup: Int) {
     i = i + 1
   }
 
-  stats.format_results
+  Stdout.new.print('')
+  Stdout.new.print(stats.name)
+  Stdout.new.print('====================================')
+  Stdout.new.print('Iterations: ${stats.iterations}')
+  Stdout.new.print('Warmup runs: ${stats.warmup_runs}')
+  Stdout.new.print('')
+  Stdout.new.print('Latency (ns):')
+  Stdout.new.print('  Mean:   ${stats.mean}')
+  Stdout.new.print('  Median: ${stats.median}')
+  Stdout.new.print('  Min:    ${stats.min}')
+  Stdout.new.print('  Max:    ${stats.max}')
+  Stdout.new.print('  Std Dev: ${stats.std_dev}')
+  Stdout.new.print('')
 }
 
-# Benchmark: search performance with different result sizes
-# This measures the impact of reading all results vs streaming
 fn benchmark_search_result_sizes(iterations: Int, warmup: Int) {
   let mut stats_small = BenchmarkStats.new(
     'Search (10 results)',
@@ -309,8 +223,32 @@ fn benchmark_search_result_sizes(iterations: Int, warmup: Int) {
     i = i + 1
   }
 
-  stats_small.format_results
-  stats_large.format_results
+  Stdout.new.print('')
+  Stdout.new.print(stats_small.name)
+  Stdout.new.print('====================================')
+  Stdout.new.print('Iterations: ${stats_small.iterations}')
+  Stdout.new.print('Warmup runs: ${stats_small.warmup_runs}')
+  Stdout.new.print('')
+  Stdout.new.print('Latency (ns):')
+  Stdout.new.print('  Mean:   ${stats_small.mean}')
+  Stdout.new.print('  Median: ${stats_small.median}')
+  Stdout.new.print('  Min:    ${stats_small.min}')
+  Stdout.new.print('  Max:    ${stats_small.max}')
+  Stdout.new.print('  Std Dev: ${stats_small.std_dev}')
+  Stdout.new.print('')
+
+  Stdout.new.print(stats_large.name)
+  Stdout.new.print('====================================')
+  Stdout.new.print('Iterations: ${stats_large.iterations}')
+  Stdout.new.print('Warmup runs: ${stats_large.warmup_runs}')
+  Stdout.new.print('')
+  Stdout.new.print('Latency (ns):')
+  Stdout.new.print('  Mean:   ${stats_large.mean}')
+  Stdout.new.print('  Median: ${stats_large.median}')
+  Stdout.new.print('  Min:    ${stats_large.min}')
+  Stdout.new.print('  Max:    ${stats_large.max}')
+  Stdout.new.print('  Std Dev: ${stats_large.std_dev}')
+  Stdout.new.print('')
 }
 
 fn pub main {
@@ -319,11 +257,8 @@ fn pub main {
   Stdout.new.print('')
 
   benchmark_string_conversion(1000, 10)
-  Stdout.new.print('')
 
   benchmark_batch_indexing(100, 10)
-  Stdout.new.print('')
 
   benchmark_search_result_sizes(100, 10)
-  Stdout.new.print('')
 }

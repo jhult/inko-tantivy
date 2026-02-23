@@ -4,6 +4,7 @@
 #
 # Performance benchmarks for search operations
 
+import benchmark_stats (BenchmarkStats)
 import memory_tracker (MemoryTracker)
 import std.stdio (Stdout)
 import std.time (Duration, Instant)
@@ -11,181 +12,6 @@ import tantivy.index_manager (TantivyIndexManager)
 import tantivy.query_builder (TantivyQueryBuilder)
 import tantivy.types (TantivyConfig)
 
-# Benchmark statistics
-type BenchmarkStats {
-  let @name: String
-  let @iterations: Int
-  let @warmup_runs: Int
-  let mut @total_duration_ns: Int
-  let mut @durations: Array[Int]
-}
-
-impl BenchmarkStats {
-  fn pub static new(
-    name: String,
-    iterations: Int,
-    warmup_runs: Int,
-  ) -> BenchmarkStats {
-    BenchmarkStats(
-      name: name,
-      iterations: iterations,
-      warmup_runs: warmup_runs,
-      total_duration_ns: 0,
-      durations: [],
-    )
-  }
-
-  # Calculate mean (average) duration in nanoseconds
-  fn pub mean -> Int {
-    if @durations.size == 0 { return 0 }
-
-    @total_duration_ns / @durations.size
-  }
-
-  # Calculate median duration (50th percentile)
-  fn pub median -> Int {
-    if @durations.size == 0 { return 0 }
-
-    let mut sorted = @durations.clone
-
-    sorted.sort
-
-    let sorted = sorted
-
-    let mid = sorted.size / 2
-
-    if sorted.size % 2 == 0 {
-      match sorted.get(mid) {
-        case Ok(v1) -> {
-          match sorted.get(mid - 1) {
-            case Ok(v2) -> (v1 + v2) / 2
-            case Error(_) -> 0
-          }
-        }
-        case Error(_) -> 0
-      }
-    } else {
-      match sorted.get(mid) {
-        case Ok(v) -> v
-        case Error(_) -> 0
-      }
-    }
-  }
-
-  # Calculate percentile (0-100)
-  fn pub percentile(percent: Int) -> Int {
-    if @durations.size == 0 { return 0 }
-
-    if percent < 0 or percent > 100 { return mean }
-
-    let mut sorted = @durations.clone
-
-    sorted.sort
-
-    let index = (percent * (sorted.size - 1)) / 100
-
-    match sorted.get(index) {
-      case Ok(v) -> v
-      case Error(_) -> mean
-    }
-  }
-
-  # Get p95 (95th percentile)
-  fn pub p95 -> Int {
-    percentile(95)
-  }
-
-  # Get p99 (99th percentile)
-  fn pub p99 -> Int {
-    percentile(99)
-  }
-
-  # Calculate variance (std dev squared)
-  fn pub variance -> Float {
-    if @durations.size < 2 { return 0.0 }
-
-    let mean_val = mean as Float
-    let mut sum_sq_diff = 0.0
-
-    for d in @durations.iter {
-      let diff = d as Float - mean_val
-
-      sum_sq_diff = sum_sq_diff + (diff * diff)
-    }
-
-    let denom = (@durations.size - 1) as Float
-
-    sum_sq_diff / denom
-  }
-
-  # Calculate standard deviation
-  fn pub std_dev -> Float {
-    variance.sqrt
-  }
-
-  # Calculate min duration
-  fn pub min -> Int {
-    if @durations.size == 0 { return 0 }
-
-    let mut min_val = @durations.get(0).or_panic
-
-    for d in @durations.iter {
-      if d < min_val { min_val = d }
-    }
-
-    min_val
-  }
-
-  # Calculate max duration
-  fn pub max -> Int {
-    if @durations.size == 0 { return 0 }
-
-    let mut max_val = @durations.get(0).or_panic
-
-    for d in @durations.iter {
-      if d > max_val { max_val = d }
-    }
-
-    max_val
-  }
-
-  # Convert nanoseconds to milliseconds
-  fn ns_to_ms(ns: Int) -> Float {
-    ns as Float / 1_000_000.0
-  }
-
-  # Format and print results
-  fn pub print_results {
-    let mean_ns = mean
-    let median_ns = median
-    let p95_ns = p95
-    let p99_ns = p99
-    let min_ns = min
-    let max_ns = max
-    let std_dev_val = std_dev
-
-    Stdout.new.print('')
-    Stdout.new.print('=== ${@name} ===')
-    Stdout.new.print('Iterations: ${@iterations}')
-    Stdout.new.print('Warmup runs: ${@warmup_runs}')
-    Stdout.new.print('')
-    Stdout.new.print('Latency Statistics:')
-    Stdout.new.print('  Mean:   ${ns_to_ms(mean_ns)}ms (${mean_ns}ns)')
-    Stdout.new.print('  Median: ${ns_to_ms(median_ns)}ms (${median_ns}ns)')
-    Stdout.new.print('  P95:    ${ns_to_ms(p95_ns)}ms (${p95_ns}ns)')
-    Stdout.new.print('  P99:    ${ns_to_ms(p99_ns)}ms (${p99_ns}ns)')
-    Stdout.new.print('  Min:    ${ns_to_ms(min_ns)}ms (${min_ns}ns)')
-    Stdout.new.print('  Max:    ${ns_to_ms(max_ns)}ms (${max_ns}ns)')
-    Stdout.new.print('  StdDev: ${std_dev_val}ms')
-    Stdout.new.print('')
-    Stdout.new.print(
-      'Throughput: ${(1_000_000_000.0 / ns_to_ms(mean_ns)).to_int} ops/sec',
-    )
-    Stdout.new.print('')
-  }
-}
-
-# Setup: Create index with test data
 fn setup_index(path: String) -> TantivyIndexManager {
   let config = match TantivyConfig.new(path) {
     case Ok(c) -> c
@@ -226,7 +52,6 @@ fn setup_index(path: String) -> TantivyIndexManager {
   }
 }
 
-# Benchmark: Simple term search
 fn bench_simple_search {
   let manager = setup_index('/tmp/bench-simple-search')
 
@@ -278,7 +103,6 @@ fn bench_simple_search {
 
   let query_bytes_per_op = 10 + 1
   let result_bytes_per_op = 24 * 10
-  let total_bytes = (query_bytes_per_op + result_bytes_per_op) * 500
 
   tracker.record_allocation('query_buffers', query_bytes_per_op * 500)
   tracker.record_allocation('result_objects', result_bytes_per_op * 500)
@@ -292,7 +116,6 @@ fn bench_simple_search {
   let _ = manager.close
 }
 
-# Benchmark: Complex query with multiple terms
 fn bench_complex_search {
   let manager = setup_index('/tmp/bench-complex-search')
 
@@ -354,7 +177,6 @@ fn bench_complex_search {
 
   let query_bytes_per_op = 4 + 5 + 5 + 1
   let result_bytes_per_op = 24 * 10
-  let total_bytes = (query_bytes_per_op + result_bytes_per_op) * 500
 
   tracker.record_allocation('query_buffers', query_bytes_per_op * 500)
   tracker.record_allocation('result_objects', result_bytes_per_op * 500)
@@ -368,7 +190,6 @@ fn bench_complex_search {
   let _ = manager.close
 }
 
-# Benchmark: Autocomplete queries
 fn bench_autocomplete {
   let manager = setup_index('/tmp/bench-autocomplete')
 
@@ -420,7 +241,6 @@ fn bench_autocomplete {
 
   let query_bytes_per_op = 7 + 3 + 1
   let result_bytes_per_op = 16 * 10
-  let total_bytes = (query_bytes_per_op + result_bytes_per_op) * 500
 
   tracker.record_allocation('query_buffers', query_bytes_per_op * 500)
   tracker.record_allocation('result_objects', result_bytes_per_op * 500)
@@ -434,7 +254,6 @@ fn bench_autocomplete {
   let _ = manager.close
 }
 
-# Benchmark: Paginated search
 fn bench_paginated_search {
   let manager = setup_index('/tmp/bench-paginated')
 
@@ -486,7 +305,6 @@ fn bench_paginated_search {
 
   let query_bytes_per_op = 10 + 1
   let result_bytes_per_op = 24 * 10
-  let total_bytes = (query_bytes_per_op + result_bytes_per_op) * 500
 
   tracker.record_allocation('query_buffers', query_bytes_per_op * 500)
   tracker.record_allocation('result_objects', result_bytes_per_op * 500)
@@ -500,58 +318,54 @@ fn bench_paginated_search {
   let _ = manager.close
 }
 
-type async Main {
-  fn async main {
-    Stdout.new.print('========================================')
-    Stdout.new.print('  Search Benchmarks with Statistics')
-    Stdout.new.print('========================================')
-    Stdout.new.print('')
-    Stdout.new.print('Methodology:')
-    Stdout.new.print(
-      '  1. Warmup runs: Executes operation N times to warm up caches',
-    )
-    Stdout.new.print(
-      '  2. Benchmark runs: Executes operation N times and measures each',
-    )
-    Stdout.new.print(
-      '  3. Statistics: Calculates mean, median, p95, p99, std dev',
-    )
-    Stdout.new.print(
-      '  4. Outliers: Min/max help identify performance anomalies',
-    )
-    Stdout.new.print('')
-    Stdout.new.print('Interpreting Results:')
-    Stdout.new.print('  - Mean: Average performance across all runs')
-    Stdout.new.print(
-      '  - Median: Typical performance (less affected by outliers)',
-    )
-    Stdout.new.print('  - P95: 95% of runs completed faster than this')
-    Stdout.new.print('  - P99: 99% of runs completed faster than this')
-    Stdout.new.print(
-      '  - StdDev: Variability in performance (lower = more consistent)',
-    )
-    Stdout.new.print('')
-    Stdout.new.print('Regression Detection:')
-    Stdout.new.print(
-      '  - Watch P95 and P99 for increases (indicates worst-case degradation)',
-    )
-    Stdout.new.print(
-      '  - Watch median for increases (indicates typical performance)',
-    )
-    Stdout.new.print(
-      '  - Compare std_dev across versions (higher = more variability)',
-    )
-    Stdout.new.print('')
-    Stdout.new.print('========================================')
-    Stdout.new.print('')
+fn pub main {
+  Stdout.new.print('========================================')
+  Stdout.new.print('  Search Benchmarks with Statistics')
+  Stdout.new.print('========================================')
+  Stdout.new.print('')
+  Stdout.new.print('Methodology:')
+  Stdout.new.print(
+    '  1. Warmup runs: Executes operation N times to warm up caches',
+  )
+  Stdout.new.print(
+    '  2. Benchmark runs: Executes operation N times and measures each',
+  )
+  Stdout.new.print(
+    '  3. Statistics: Calculates mean, median, p95, p99, std dev',
+  )
+  Stdout.new.print('  4. Outliers: Min/max help identify performance anomalies')
+  Stdout.new.print('')
+  Stdout.new.print('Interpreting Results:')
+  Stdout.new.print('  - Mean: Average performance across all runs')
+  Stdout.new.print(
+    '  - Median: Typical performance (less affected by outliers)',
+  )
+  Stdout.new.print('  - P95: 95% of runs completed faster than this')
+  Stdout.new.print('  - P99: 99% of runs completed faster than this')
+  Stdout.new.print(
+    '  - StdDev: Variability in performance (lower = more consistent)',
+  )
+  Stdout.new.print('')
+  Stdout.new.print('Regression Detection:')
+  Stdout.new.print(
+    '  - Watch P95 and P99 for increases (indicates worst-case degradation)',
+  )
+  Stdout.new.print(
+    '  - Watch median for increases (indicates typical performance)',
+  )
+  Stdout.new.print(
+    '  - Compare std_dev across versions (higher = more variability)',
+  )
+  Stdout.new.print('')
+  Stdout.new.print('========================================')
+  Stdout.new.print('')
 
-    bench_simple_search
-    bench_complex_search
-    bench_autocomplete
-    bench_paginated_search
+  bench_simple_search
+  bench_complex_search
+  bench_autocomplete
+  bench_paginated_search
 
-    Stdout.new.print('========================================')
-    Stdout.new.print('  All Benchmarks Complete')
-    Stdout.new.print('========================================')
-  }
+  Stdout.new.print('========================================')
+  Stdout.new.print('  All Benchmarks Complete')
+  Stdout.new.print('========================================')
 }
