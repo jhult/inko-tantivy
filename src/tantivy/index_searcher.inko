@@ -27,7 +27,7 @@ import tantivy.ffi (
 import tantivy.marshal (
   allocate_and_init_error, c_array_element_ptr, c_pointer_to_string_checked,
   check_ffi_error, read_optional_string_field, read_string_field,
-  release_string_buffer, string_to_c_buffer,
+  string_to_c_buffer,
 )
 import tantivy.types (
   TantivyAggregationResult, TantivyResult, TantivySuggestion,
@@ -87,9 +87,6 @@ fn pub search(
     num_results_out_ptr as Pointer[UInt64],
     error_out_ptr as Pointer[UInt8],
   )
-
-  # Release query buffer back to pool
-  release_string_buffer(query_buf)
 
   match check_ffi_error(error_out_ptr) {
     case Error(e) -> return Result.Error(e)
@@ -312,6 +309,22 @@ fn pub aggregate_terms(
   query: String,
   limit: Int,
 ) -> Result[Array[TantivyAggregationResult], String] {
+  # Validate parameters
+  match validate_field_name(field_name) {
+    case Ok(_) -> {}
+    case Error(e) -> return Result.Error('Invalid field name: ${e}')
+  }
+
+  match validate_query(query) {
+    case Ok(_) -> {}
+    case Error(e) -> return Result.Error('Invalid query: ${e}')
+  }
+
+  match validate_limit(limit, 'aggregate_terms') {
+    case Ok(_) -> {}
+    case Error(e) -> return Result.Error('Invalid limit: ${e}')
+  }
+
   let field_buf = string_to_c_buffer(field_name)
   let query_buf = string_to_c_buffer(query)
 
