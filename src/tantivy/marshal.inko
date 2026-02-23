@@ -27,10 +27,6 @@ impl FFIContext {
   fn pub mut retain_string(s: String) {
     @strings.push(s)
   }
-
-  fn pub mut clear {
-    @strings = []
-  }
 }
 
 # Helper: Join array of strings with separator
@@ -64,9 +60,6 @@ fn pub c_array_element_ptr(
 fn pub string_to_c_buffer(s: String) -> String {
   s
 }
-
-# No-op for string_to_c_buffer - strings are passed by reference
-fn pub release_string_buffer(buffer: String) {}
 
 # Helper: Read a string field from a C struct at given offset
 # Handles null pointer check and conversion
