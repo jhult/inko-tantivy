@@ -155,7 +155,7 @@ impl TantivyIndexLifecycle {
   }
 
   # Get the raw index pointer for FFI operations
-  fn pub mut index_ptr -> Option[Pointer[UInt8]] {
+  fn pub index_ptr -> Option[Pointer[UInt8]] {
     match @index {
       case Some(idx) -> Option.Some(idx)
       case None -> Option.None
