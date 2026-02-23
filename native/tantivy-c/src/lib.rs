@@ -36,6 +36,8 @@ const DEFAULT_SEARCH_FIELD_SUBJECT: &str = "subject";
 const DEFAULT_SEARCH_FIELD_BODY: &str = "body";
 
 // Security limits to prevent resource exhaustion
+// IMPORTANT: These values must be kept in sync with src/input_validation.inko
+// When modifying these, update the corresponding constants in Inko.
 const MAX_FIELDS_PER_DOCUMENT: usize = 1000;
 const MAX_FIELD_VALUE_LENGTH: usize = 10 * 1024 * 1024; // 10MB per field
 const MAX_QUERY_LENGTH: usize = 10 * 1024; // 10KB query string
@@ -469,6 +471,70 @@ fn escape_query_string(s: &str) -> String {
     result
 }
 
+// Helper: Add a field to a document with proper type handling
+// Returns Ok(()) on success, Err(error_message) on failure
+// doc_index is used for error messages in batch operations (None for single doc)
+fn add_field_to_doc(
+    doc: &mut tantivy::TantivyDocument,
+    schema: &Schema,
+    key: &str,
+    value: &str,
+    doc_index: Option<usize>,
+) -> Result<(), String> {
+    let field_entry = match schema.get_field(key) {
+        Ok(f) => f,
+        Err(_) => return Ok(()), // Skip unknown fields silently
+    };
+
+    let field_type = schema.get_field_entry(field_entry);
+    let doc_prefix = doc_index.map_or(String::new(), |i| format!("Document {}: ", i));
+
+    match field_type.field_type() {
+        FieldType::Str(_) => {
+            doc.add_text(field_entry, value);
+        }
+        FieldType::U64(_) => match value.parse::<u64>() {
+            Ok(num) => doc.add_u64(field_entry, num),
+            Err(_) => {
+                return Err(format!(
+                    "{}field '{}' expects u64 but value '{}' is not a valid unsigned integer",
+                    doc_prefix, key, value
+                ));
+            }
+        },
+        FieldType::I64(_) => match value.parse::<i64>() {
+            Ok(num) => doc.add_i64(field_entry, num),
+            Err(_) => {
+                return Err(format!(
+                    "{}field '{}' expects i64 but value '{}' is not a valid signed integer",
+                    doc_prefix, key, value
+                ));
+            }
+        },
+        FieldType::F64(_) => match value.parse::<f64>() {
+            Ok(num) => doc.add_f64(field_entry, num),
+            Err(_) => {
+                return Err(format!(
+                    "{}field '{}' expects f64 but value '{}' is not a valid floating point number",
+                    doc_prefix, key, value
+                ));
+            }
+        },
+        FieldType::Bool(_) => {
+            let bool_val = value.to_lowercase() == "true";
+            doc.add_bool(field_entry, bool_val);
+        }
+        unsupported_type => {
+            eprintln!(
+                "Warning: Unsupported field type {:?} for field '{}', skipping",
+                unsupported_type, key
+            );
+        }
+    }
+
+    Ok(())
+}
+
 // Helper: Sanitize error messages to remove filesystem paths
 pub(crate) fn sanitize_error_message(msg: &str) -> String {
     if !SANITIZE_ERRORS {
@@ -893,54 +959,12 @@ pub unsafe extern "C" fn tantivy_index_add_doc(
             return -1;
         }
 
-        if let Ok(field_entry) = wrapper.schema.get_field(&key) {
-            let field_type = wrapper.schema.get_field_entry(field_entry);
-
-            match field_type.field_type() {
-                FieldType::Str(_) => {
-                    doc.add_text(field_entry, &value);
-                }
-                FieldType::U64(_) => match value.parse::<u64>() {
-                    Ok(num) => doc.add_u64(field_entry, num),
-                    Err(_) => {
-                        *error_out = create_error_string(&format!(
-                            "Field '{}' expects u64 but value '{}' is not a valid unsigned integer",
-                            key, value
-                        ));
-                        return -1;
-                    }
-                },
-                FieldType::I64(_) => match value.parse::<i64>() {
-                    Ok(num) => doc.add_i64(field_entry, num),
-                    Err(_) => {
-                        *error_out = create_error_string(&format!(
-                            "Field '{}' expects i64 but value '{}' is not a valid signed integer",
-                            key, value
-                        ));
-                        return -1;
-                    }
-                },
-                FieldType::F64(_) => match value.parse::<f64>() {
-                    Ok(num) => doc.add_f64(field_entry, num),
-                    Err(_) => {
-                        *error_out = create_error_string(&format!(
-                                "Field '{}' expects f64 but value '{}' is not a valid floating point number",
-                                key, value
-                            ));
-                        return -1;
-                    }
-                },
-                FieldType::Bool(_) => {
-                    let bool_val = value.to_lowercase() == "true";
-                    doc.add_bool(field_entry, bool_val);
-                }
-                unsupported_type => {
-                    // Log warning for unsupported field types instead of silently skipping
-                    eprintln!(
-                        "Warning: Unsupported field type {:?} for field '{}', skipping",
-                        unsupported_type, key
-                    );
-                }
+        // Add field to document using shared helper
+        match add_field_to_doc(&mut doc, &wrapper.schema, &key, &value, None) {
+            Ok(()) => {}
+            Err(e) => {
+                *error_out = create_error_string(&e);
+                return -1;
             }
         }
     }
@@ -1045,53 +1069,12 @@ pub unsafe extern "C" fn tantivy_index_add_docs_batch(
                 return added_count as c_int;
             }
 
-            if let Ok(field_entry) = wrapper.schema.get_field(&key) {
-                let field_type = wrapper.schema.get_field_entry(field_entry);
-
-                match field_type.field_type() {
-                    FieldType::Str(_) => {
-                        doc.add_text(field_entry, &value);
-                    }
-                    FieldType::U64(_) => match value.parse::<u64>() {
-                        Ok(num) => doc.add_u64(field_entry, num),
-                        Err(_) => {
-                            *error_out = create_error_string(&format!(
-                                    "Document {}: field '{}' expects u64 but value '{}' is not a valid unsigned integer",
-                                    added_count, key, value
-                                ));
-                            return added_count as c_int;
-                        }
-                    },
-                    FieldType::I64(_) => match value.parse::<i64>() {
-                        Ok(num) => doc.add_i64(field_entry, num),
-                        Err(_) => {
-                            *error_out = create_error_string(&format!(
-                                    "Document {}: field '{}' expects i64 but value '{}' is not a valid signed integer",
-                                    added_count, key, value
-                                ));
-                            return added_count as c_int;
-                        }
-                    },
-                    FieldType::F64(_) => match value.parse::<f64>() {
-                        Ok(num) => doc.add_f64(field_entry, num),
-                        Err(_) => {
-                            *error_out = create_error_string(&format!(
-                                    "Document {}: field '{}' expects f64 but value '{}' is not a valid floating point number",
-                                    added_count, key, value
-                                ));
-                            return added_count as c_int;
-                        }
-                    },
-                    FieldType::Bool(_) => {
-                        let bool_val = value.to_lowercase() == "true";
-                        doc.add_bool(field_entry, bool_val);
-                    }
-                    unsupported_type => {
-                        eprintln!(
-                            "Warning: Unsupported field type {:?} for field '{}', skipping",
-                            unsupported_type, key
-                        );
-                    }
+            // Add field to document using shared helper
+            match add_field_to_doc(&mut doc, &wrapper.schema, &key, &value, Some(added_count)) {
+                Ok(()) => {}
+                Err(e) => {
+                    *error_out = create_error_string(&e);
+                    return added_count as c_int;
                 }
             }
         }
