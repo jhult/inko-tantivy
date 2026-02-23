@@ -2,11 +2,14 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+import helpers (ffi_available)
 import std.test (Tests)
 import tantivy.index_manager (TantivyIndexManager)
 import tantivy.types (TantivyConfig)
 
 fn pub tests(t: mut Tests) {
+  if !ffi_available { return }
+
   t.test('Repeated search operations complete successfully', fn (t) {
     let manager = TantivyIndexManager.new(
       match TantivyConfig.new('/tmp/test-memory-leaks-search') {
