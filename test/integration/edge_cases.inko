@@ -5,12 +5,15 @@
 # Integration tests for edge cases
 # These tests verify the system handles edge cases and boundary conditions gracefully.
 
-import helpers (cleanup_test_index, temp_index_path)
+import helpers (cleanup_test_index, ffi_available, temp_index_path)
 import std.test (Tests)
 import tantivy.index_manager (TantivyIndexManager)
 import tantivy.types (TantivyConfig)
 
 fn pub tests(t: mut Tests) {
+  # Skip all tests if FFI is unavailable
+  if !ffi_available { return }
+
   # Test edge case: empty doc_id
   t.test('Handle empty doc_id', fn (t) {
     let path = temp_index_path('edge-empty-doc-id')
