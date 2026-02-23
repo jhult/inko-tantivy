@@ -17,6 +17,10 @@ let pub MAX_DOC_ID_LENGTH = 1024
 # Maximum field name length
 let pub MAX_FIELD_NAME_LENGTH = 256
 
+# Maximum fields per document (1000)
+# Must match MAX_FIELDS_PER_DOCUMENT in native/tantivy-c/src/lib.rs
+let pub MAX_FIELDS_PER_DOCUMENT = 1000
+
 # Maximum field value length (10MB)
 # Must match MAX_FIELD_VALUE_LENGTH in native/tantivy-c/src/lib.rs
 let pub MAX_FIELD_VALUE_LENGTH = 10_485_760
@@ -24,6 +28,10 @@ let pub MAX_FIELD_VALUE_LENGTH = 10_485_760
 # Maximum query string length (10KB)
 # Must match MAX_QUERY_LENGTH in native/tantivy-c/src/lib.rs
 let pub MAX_QUERY_LENGTH = 10_240
+
+# Maximum search limit (10000)
+# Must match MAX_SEARCH_LIMIT in native/tantivy-c/src/lib.rs
+let pub MAX_SEARCH_LIMIT = 10_000
 
 # Helper: Check if byte is a letter (a-z or A-Z)
 fn is_letter_byte(byte: Int) -> Bool {
@@ -122,7 +130,9 @@ fn pub validate_query(query: String) -> Result[String, String] {
 fn pub validate_limit(limit: Int, operation: String) -> Result[Int, String] {
   if limit < 0 { return Result.Error('Limit must be non-negative') }
 
-  if limit > 10_000 { return Result.Error('Limit exceeds maximum value') }
+  if limit > MAX_SEARCH_LIMIT {
+    return Result.Error('Limit exceeds maximum value')
+  }
 
   Result.Ok(limit)
 }
