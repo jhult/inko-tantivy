@@ -41,10 +41,15 @@ fn pub search(
   limit: Int,
   offset: Int,
 ) -> Result[Array[TantivyResult], String] {
-  # Validate parameters
-  match validate_query(query) {
-    case Ok(_) -> {}
-    case Error(e) -> return Result.Error('Invalid query: ${e}')
+  # Empty query matches all documents (convert to '*' internally)
+  let effective_query = if query.size == 0 { '*' } else { query }
+
+  # Validate parameters (skip empty check since we handle it above)
+  if effective_query.size > 0 {
+    match validate_query(effective_query) {
+      case Ok(_) -> {}
+      case Error(e) -> return Result.Error('Invalid query: ${e}')
+    }
   }
 
   match validate_limit(limit, 'search') {
@@ -58,7 +63,7 @@ fn pub search(
   }
 
   # Convert query to C string
-  let query_buf = string_to_c_buffer(query)
+  let query_buf = string_to_c_buffer(effective_query)
 
   # Allocate output pointers
   let results_out_storage = ByteArray.filled(with: 0, times: 8)
@@ -93,7 +98,7 @@ fn pub search(
 
   if (result as Int) != 0 {
     return Result.Error(
-      'Search failed for query: "${query}" (limit: ${limit}, offset: ${offset}). '
+      'Search failed for query: "${effective_query}" (limit: ${limit}, offset: ${offset}). '
         + 'Possible causes: 1) Invalid query syntax, 2) Index not yet committed, '
         + '3) Invalid limit/offset values, 4) Field name not in schema. '
         + 'Suggestions: Check query syntax, verify index is committed, '

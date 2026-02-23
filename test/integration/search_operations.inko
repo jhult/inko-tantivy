@@ -245,7 +245,7 @@ fn pub tests(t: mut Tests) {
       }
     }
 
-    # Empty query should match all documents
+    # Empty query is converted to '*' internally, matching all documents
     match manager.search('', limit: 10, offset: 0) {
       case Ok(results) -> t.true(results.size > 0)
       case Error(_) -> {
