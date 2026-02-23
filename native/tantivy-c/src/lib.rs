@@ -1165,6 +1165,11 @@ pub unsafe extern "C" fn tantivy_index_delete_docs(
     num_ids: usize,
     error_out: *mut *mut c_char,
 ) -> c_int {
+    if error_out.is_null() {
+        eprintln!("[TANTIVY_FFI] error_out is NULL in tantivy_index_delete_docs");
+        return -1;
+    }
+
     if index.is_null() {
         *error_out = create_error_string("Index is null");
         return -1;
