@@ -13,7 +13,7 @@ fn pub tests(t: mut Tests) {
       case Error(e) -> {
         t.true(e.contains?('directory traversal') or e.contains?('..'))
       }
-      case Ok(_) -> panic('Should have failed')
+      case Ok(_) -> t.true(false)
     }
   })
 
@@ -22,14 +22,14 @@ fn pub tests(t: mut Tests) {
       case Error(e) -> {
         t.true(e.contains?('directory traversal') or e.contains?('..'))
       }
-      case Ok(_) -> panic('Should have failed')
+      case Ok(_) -> t.true(false)
     }
   })
 
   t.test('Reject path with null bytes', fn (t) {
     match TantivyConfig.new('') {
       case Error(e) -> t.true(e.contains?('empty'))
-      case Ok(_) -> panic('Should have failed')
+      case Ok(_) -> t.true(false)
     }
   })
 
@@ -37,7 +37,10 @@ fn pub tests(t: mut Tests) {
     let path = temp_index_path('security-wildcard')
     let config = match TantivyConfig.new(path) {
       case Ok(c) -> c
-      case Error(_) -> panic('Config creation failed')
+      case Error(_) -> {
+        t.true(false)
+        return
+      }
     }
     let manager = TantivyIndexManager.new(config)
 
@@ -57,7 +60,7 @@ fn pub tests(t: mut Tests) {
         let _ = manager.commit
         let _ = manager.close
       }
-      case Error(_) -> panic('Config creation failed')
+      case Error(_) -> t.true(false)
     }
 
     cleanup_test_index(path)
@@ -67,7 +70,10 @@ fn pub tests(t: mut Tests) {
     let path = temp_index_path('security-boolean')
     let config = match TantivyConfig.new(path) {
       case Ok(c) -> c
-      case Error(_) -> panic('Config creation failed')
+      case Error(_) -> {
+        t.true(false)
+        return
+      }
     }
     let manager = TantivyIndexManager.new(config)
 
@@ -93,7 +99,7 @@ fn pub tests(t: mut Tests) {
 
         let _ = manager.close
       }
-      case Error(_) -> panic('Config creation failed')
+      case Error(_) -> t.true(false)
     }
 
     cleanup_test_index(path)
@@ -103,7 +109,10 @@ fn pub tests(t: mut Tests) {
     let path = temp_index_path('security-regex')
     let config = match TantivyConfig.new(path) {
       case Ok(c) -> c
-      case Error(_) -> panic('Config creation failed')
+      case Error(_) -> {
+        t.true(false)
+        return
+      }
     }
     let manager = TantivyIndexManager.new(config)
 
@@ -129,7 +138,7 @@ fn pub tests(t: mut Tests) {
 
         let _ = manager.close
       }
-      case Error(_) -> panic('Config creation failed')
+      case Error(_) -> t.true(false)
     }
 
     cleanup_test_index(path)
@@ -139,7 +148,10 @@ fn pub tests(t: mut Tests) {
     let path = temp_index_path('security-schema-malformed')
     let config = match TantivyConfig.new(path) {
       case Ok(c) -> c
-      case Error(_) -> panic('Config creation failed')
+      case Error(_) -> {
+        t.true(false)
+        return
+      }
     }
     let manager = TantivyIndexManager.new(config)
 
@@ -148,7 +160,7 @@ fn pub tests(t: mut Tests) {
         let _malformed_schema = '{"invalid": json}'
 
         match manager.open {
-          case Ok(_) -> panic('Should have failed')
+          case Ok(_) -> t.true(false)
           case Error(_) -> t.true(true)
         }
       }
@@ -164,7 +176,10 @@ fn pub tests(t: mut Tests) {
     let path = temp_index_path('security-schema-oversized')
     let config = match TantivyConfig.new(path) {
       case Ok(c) -> c
-      case Error(_) -> panic('Config creation failed')
+      case Error(_) -> {
+        t.true(false)
+        return
+      }
     }
     let manager = TantivyIndexManager.new(config)
 
@@ -183,7 +198,7 @@ fn pub tests(t: mut Tests) {
         schema_json = schema_json + '"field10000": "text"}'
 
         match manager.open {
-          case Ok(_) -> panic('Should have failed')
+          case Ok(_) -> t.true(false)
           case Error(e) -> {
             t.true(
               e.contains?('schema')
@@ -205,7 +220,10 @@ fn pub tests(t: mut Tests) {
     let path = temp_index_path('security-massive-doc')
     let config = match TantivyConfig.new(path) {
       case Ok(c) -> c
-      case Error(_) -> panic('Config creation failed')
+      case Error(_) -> {
+        t.true(false)
+        return
+      }
     }
     let manager = TantivyIndexManager.new(config)
 
@@ -238,7 +256,7 @@ fn pub tests(t: mut Tests) {
 
         let _ = manager.close
       }
-      case Error(_) -> panic('Config creation failed')
+      case Error(_) -> t.true(false)
     }
 
     cleanup_test_index(path)
@@ -248,7 +266,10 @@ fn pub tests(t: mut Tests) {
     let path = temp_index_path('security-excessive-fields')
     let config = match TantivyConfig.new(path) {
       case Ok(c) -> c
-      case Error(_) -> panic('Config creation failed')
+      case Error(_) -> {
+        t.true(false)
+        return
+      }
     }
     let manager = TantivyIndexManager.new(config)
 
@@ -277,7 +298,7 @@ fn pub tests(t: mut Tests) {
 
         let _ = manager.close
       }
-      case Error(_) -> panic('Config creation failed')
+      case Error(_) -> t.true(false)
     }
 
     cleanup_test_index(path)
@@ -287,7 +308,10 @@ fn pub tests(t: mut Tests) {
     let path = temp_index_path('security-empty-fields')
     let config = match TantivyConfig.new(path) {
       case Ok(c) -> c
-      case Error(_) -> panic('Config creation failed')
+      case Error(_) -> {
+        t.true(false)
+        return
+      }
     }
     let manager = TantivyIndexManager.new(config)
 
@@ -300,7 +324,7 @@ fn pub tests(t: mut Tests) {
         ]
 
         match manager.add_doc('test-doc', fields) {
-          case Ok(_) -> panic('Should have failed')
+          case Ok(_) -> t.true(false)
           case Error(_) -> t.true(true)
         }
 
