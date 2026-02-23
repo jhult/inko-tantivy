@@ -7,6 +7,10 @@
 # This module provides the main public API for managing Tantivy search indexes.
 # It is a thin facade that owns a TantivyIndexLifecycle and delegates operations
 # to the index_writer and index_searcher modules.
+#
+# IMPORTANT: Always call close() explicitly for proper error handling.
+# The Drop implementation only logs errors to stderr, which may mask issues
+# like data corruption or resource leaks in production.
 
 import std.drop (Drop)
 import std.stdio (Stderr)
@@ -19,13 +23,20 @@ import tantivy.types (
 )
 
 # Tantivy index manager
+#
+# IMPORTANT: Always call close() explicitly for proper error handling.
+# Check is_closed_cleanly after drop to detect cleanup issues.
 type pub TantivyIndexManager {
   let mut @lifecycle: TantivyIndexLifecycle
+  let mut @closed_cleanly: Bool
 }
 
 impl TantivyIndexManager {
   fn pub static new(config: TantivyConfig) -> TantivyIndexManager {
-    TantivyIndexManager(lifecycle: TantivyIndexLifecycle.new(config))
+    TantivyIndexManager(
+      lifecycle: TantivyIndexLifecycle.new(config),
+      closed_cleanly: false,
+    )
   }
 
   # Check if the FFI library is available
@@ -41,12 +52,23 @@ impl TantivyIndexManager {
 
   # Close the Tantivy index
   fn pub mut close -> Result[Bool, String] {
-    @lifecycle.close
+    match @lifecycle.close {
+      case Ok(v) -> {
+        @closed_cleanly = true
+        Result.Ok(v)
+      }
+      case Error(e) -> Result.Error(e)
+    }
   }
 
   # Check if index is open
   fn pub is_open -> Bool {
     @lifecycle.is_open
+  }
+
+  # Check if index was closed cleanly (via close(), not drop)
+  fn pub is_closed_cleanly -> Bool {
+    @closed_cleanly
   }
 
   # Commit pending changes
@@ -225,7 +247,7 @@ impl Drop for TantivyIndexManager {
     match @lifecycle.index_ptr {
       case Some(_) -> {
         match @lifecycle.close {
-          case Ok(_) -> {}
+          case Ok(_) -> @closed_cleanly = true
           case Error(e) -> {
             Stderr.new.print(
               '[TANTIVY_DROP] Warning: Failed to close index during '
