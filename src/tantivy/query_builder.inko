@@ -6,6 +6,7 @@
 #
 # This module provides a builder pattern for constructing Tantivy search queries.
 
+import std.string (StringBuffer)
 import tantivy.marshal (join_strings)
 
 # Tantivy query builder
@@ -77,25 +78,36 @@ impl TantivyQueryBuilder {
 # Prevents query injection by escaping characters with special meaning
 # Full list of Tantivy/Lucene special chars: " ' + - ( ) [ ] : * ? \ ^ ~ { } | ! and space
 fn escape_query_string(s: String) -> String {
-  let result = s.replace('\\', '\\\\')
-  let result = result.replace('"', '\\"')
-  let result = result.replace("'", "\\'")
-  let result = result.replace('(', '\\(')
-  let result = result.replace(')', '\\)')
-  let result = result.replace('[', '\\[')
-  let result = result.replace(']', '\\]')
-  let result = result.replace(':', '\\:')
-  let result = result.replace('+', '\\+')
-  let result = result.replace('-', '\\-')
-  let result = result.replace('*', '\\*')
-  let result = result.replace('?', '\\?')
-  let result = result.replace(' ', '\\ ')
-  let result = result.replace('^', '\\^')
-  let result = result.replace('~', '\\~')
-  let result = result.replace('{', '\\{')
-  let result = result.replace('}', '\\}')
-  let result = result.replace('|', '\\|')
-  let result = result.replace('!', '\\!')
+  let mut buffer = StringBuffer.new
 
-  result
+  for c in s.chars {
+    if is_special_char(c) { buffer.push('\\') }
+
+    buffer.push(c)
+  }
+
+  buffer.into_string
+}
+
+# Helper: Check if character needs escaping in Tantivy query
+fn is_special_char(c: String) -> Bool {
+  c == '"'
+    or c == '\''
+    or c == '+'
+    or c == '-'
+    or c == '('
+    or c == ')'
+    or c == '['
+    or c == ']'
+    or c == ':'
+    or c == '*'
+    or c == '?'
+    or c == '\\'
+    or c == ' '
+    or c == '^'
+    or c == '~'
+    or c == '{'
+    or c == '}'
+    or c == '|'
+    or c == '!'
 }
