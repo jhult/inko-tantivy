@@ -76,6 +76,11 @@ impl TantivyQueryBuilder {
 
 # Helper: Escape special characters in Tantivy query strings
 # Prevents query injection by escaping characters with special meaning
+#
+# NOTE: This function is duplicated in native/tantivy-c/src/lib.rs
+# Both versions must be kept in sync. Any changes to the special character
+# list must be applied to both locations.
+#
 # Full list of Tantivy/Lucene special chars: " ' + - ( ) [ ] : * ? \ ^ ~ { } | ! and space
 fn escape_query_string(s: String) -> String {
   let mut buffer = StringBuffer.new
