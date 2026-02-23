@@ -5,10 +5,27 @@
 # Performance benchmarks for aggregation and faceting operations
 
 import benchmark_stats (BenchmarkStats)
+import std.fs.path (Path)
 import std.stdio (Stdout)
 import std.time (Duration, Instant)
 import tantivy.index_manager (TantivyIndexManager)
 import tantivy.types (TantivyConfig)
+
+# Benchmark paths used (for cleanup)
+let BENCH_PATHS = [
+  '/tmp/bench-facet-folder',
+  '/tmp/bench-facet-label',
+  '/tmp/bench-terms-agg',
+  '/tmp/bench-faceted-search',
+]
+
+# Cleanup benchmark index directories
+fn cleanup_benchmark_indexes {
+  for path in BENCH_PATHS {
+    let p = Path.new(path)
+    let _ = p.remove_directory_all
+  }
+}
 
 fn setup_index(path: String) -> TantivyIndexManager {
   let config = match TantivyConfig.new(path) {
@@ -291,6 +308,8 @@ fn pub main {
   bench_facet_by_label
   bench_terms_aggregation
   bench_faceted_search
+
+  cleanup_benchmark_indexes
 
   Stdout.new.print('========================================')
   Stdout.new.print('  All Benchmarks Complete')

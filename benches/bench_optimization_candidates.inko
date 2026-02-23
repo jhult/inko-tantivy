@@ -3,10 +3,22 @@
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 import benchmark_stats (BenchmarkStats)
+import std.fs.path (Path)
 import std.stdio (Stdout)
 import std.time (Duration, Instant)
 import tantivy.index_manager (TantivyIndexManager)
 import tantivy.types (TantivyConfig)
+
+# Benchmark paths used (for cleanup)
+let BENCH_PATHS = ['/tmp/bench-index']
+
+# Cleanup benchmark index directories
+fn cleanup_benchmark_indexes {
+  for path in BENCH_PATHS {
+    let p = Path.new(path)
+    let _ = p.remove_directory_all
+  }
+}
 
 fn benchmark_string_conversion(iterations: Int, warmup: Int) {
   let mut stats = BenchmarkStats.new(
@@ -261,4 +273,6 @@ fn pub main {
   benchmark_batch_indexing(100, 10)
 
   benchmark_search_result_sizes(100, 10)
+
+  cleanup_benchmark_indexes
 }

@@ -5,10 +5,26 @@
 # Performance benchmarks for document indexing operations
 
 import benchmark_stats (BenchmarkStats)
+import std.fs.path (Path)
 import std.stdio (Stdout)
 import std.time (Duration, Instant)
 import tantivy.index_manager (TantivyIndexManager)
 import tantivy.types (TantivyConfig)
+
+# Benchmark paths used (for cleanup)
+let BENCH_PATHS = [
+  '/tmp/bench-single-doc',
+  '/tmp/bench-batch-docs',
+  '/tmp/bench-large-doc',
+]
+
+# Cleanup benchmark index directories
+fn cleanup_benchmark_indexes {
+  for path in BENCH_PATHS {
+    let p = Path.new(path)
+    let _ = p.remove_directory_all
+  }
+}
 
 fn setup_index(path: String) -> TantivyIndexManager {
   let config = match TantivyConfig.new(path) {
@@ -311,6 +327,8 @@ fn pub main {
   bench_single_doc_indexing
   bench_batch_doc_indexing
   bench_large_doc_indexing
+
+  cleanup_benchmark_indexes
 
   Stdout.new.print('========================================')
   Stdout.new.print('  All Benchmarks Complete')

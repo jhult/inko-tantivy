@@ -6,11 +6,28 @@
 
 import benchmark_stats (BenchmarkStats)
 import memory_tracker (MemoryTracker)
+import std.fs.path (Path)
 import std.stdio (Stdout)
 import std.time (Duration, Instant)
 import tantivy.index_manager (TantivyIndexManager)
 import tantivy.query_builder (TantivyQueryBuilder)
 import tantivy.types (TantivyConfig)
+
+# Benchmark paths used (for cleanup)
+let BENCH_PATHS = [
+  '/tmp/bench-simple-search',
+  '/tmp/bench-complex-search',
+  '/tmp/bench-autocomplete',
+  '/tmp/bench-paginated',
+]
+
+# Cleanup benchmark index directories
+fn cleanup_benchmark_indexes {
+  for path in BENCH_PATHS {
+    let p = Path.new(path)
+    let _ = p.remove_directory_all
+  }
+}
 
 fn setup_index(path: String) -> TantivyIndexManager {
   let config = match TantivyConfig.new(path) {
@@ -364,6 +381,8 @@ fn pub main {
   bench_complex_search
   bench_autocomplete
   bench_paginated_search
+
+  cleanup_benchmark_indexes
 
   Stdout.new.print('========================================')
   Stdout.new.print('  All Benchmarks Complete')
