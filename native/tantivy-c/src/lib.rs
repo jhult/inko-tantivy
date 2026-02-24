@@ -1410,6 +1410,11 @@ pub unsafe extern "C" fn tantivy_index_get_doc(
     doc_id: *const c_char,
     error_out: *mut *mut c_char,
 ) -> *mut c_char {
+    if error_out.is_null() {
+        eprintln!("[TANTIVY_FFI] error_out is NULL in tantivy_index_get_doc");
+        return std::ptr::null_mut();
+    }
+
     if index.is_null() {
         *error_out = create_error_string("Index is null");
         return std::ptr::null_mut();
@@ -1639,6 +1644,16 @@ pub unsafe extern "C" fn tantivy_index_get_docs(
     num_results_out: *mut size_t,
     error_out: *mut *mut c_char,
 ) -> *mut *mut c_char {
+    if error_out.is_null() {
+        eprintln!("[TANTIVY_FFI] error_out is NULL in tantivy_index_get_docs");
+        return std::ptr::null_mut();
+    }
+
+    if num_results_out.is_null() {
+        *error_out = create_error_string("num_results_out is null");
+        return std::ptr::null_mut();
+    }
+
     if index.is_null() {
         *error_out = create_error_string("Index is null");
         return std::ptr::null_mut();
@@ -1738,6 +1753,16 @@ pub unsafe extern "C" fn tantivy_aggregate_terms(
     num_results_out: *mut size_t,
     error_out: *mut *mut c_char,
 ) -> c_int {
+    if error_out.is_null() {
+        eprintln!("[TANTIVY_FFI] error_out is NULL in tantivy_aggregate_terms");
+        return -1;
+    }
+
+    if results_out.is_null() || num_results_out.is_null() {
+        *error_out = create_error_string("results_out or num_results_out is null");
+        return -1;
+    }
+
     if index.is_null() {
         *error_out = create_error_string("Index is null");
         return -1;
@@ -1894,6 +1919,16 @@ pub unsafe extern "C" fn tantivy_autocomplete(
     num_results_out: *mut size_t,
     error_out: *mut *mut c_char,
 ) -> c_int {
+    if error_out.is_null() {
+        eprintln!("[TANTIVY_FFI] error_out is NULL in tantivy_autocomplete");
+        return -1;
+    }
+
+    if results_out.is_null() || num_results_out.is_null() {
+        *error_out = create_error_string("results_out or num_results_out is null");
+        return -1;
+    }
+
     if index.is_null() {
         *error_out = create_error_string("Index is null");
         return -1;
@@ -2013,6 +2048,16 @@ pub unsafe extern "C" fn tantivy_did_you_mean(
     num_results_out: *mut size_t,
     error_out: *mut *mut c_char,
 ) -> c_int {
+    if error_out.is_null() {
+        eprintln!("[TANTIVY_FFI] error_out is NULL in tantivy_did_you_mean");
+        return -1;
+    }
+
+    if results_out.is_null() || num_results_out.is_null() {
+        *error_out = create_error_string("results_out or num_results_out is null");
+        return -1;
+    }
+
     if index.is_null() {
         *error_out = create_error_string("Index is null");
         return -1;
