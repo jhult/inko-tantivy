@@ -22,12 +22,47 @@ local linters = new Mapping<String, Step> {
     }
 }
 
+local bdHooks = new Mapping<String, Step> {
+    ["bd-post-checkout"] {
+        check = "bd hook post-checkout"
+    }
+    ["bd-post-merge"] {
+        check = "bd hook post-merge"
+    }
+    ["bd-pre-push"] {
+        check = "bd hooks run pre-push"
+    }
+    ["bd-prepare-commit-msg"] {
+        check = "bd hooks run prepare-commit-msg"
+    }
+}
+
 hooks {
     ["pre-commit"] {
         steps {
             ["bd-sync"] = linters["bd-sync"]
             ["inko-fmt"] = linters["inko-fmt"]
             ["license-eye"] = linters["license-eye"]
+        }
+    }
+    ["post-checkout"] {
+        steps {
+            ["bd-post-checkout"] = bdHooks["bd-post-checkout"]
+        }
+    }
+    ["post-merge"] {
+        steps {
+            ["bd-post-merge"] = bdHooks["bd-post-merge"]
+        }
+    }
+    ["pre-push"] {
+        steps {
+            ["bd-pre-push"] = bdHooks["bd-pre-push"]
+        }
+    }
+    ["prepare-commit-msg"] {
+        steps {
+            ["bd-prepare-commit-msg"] = bdHooks["bd-prepare-commit-msg"]
         }
     }
     ["fix"] {
