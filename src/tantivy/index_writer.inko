@@ -73,7 +73,14 @@ fn pub add_docs_batch(
   idx: Pointer[UInt8],
   docs: Array[(String, Array[(String, String)])],
 ) -> Result[Int, String] {
-  # Calculate total size needed
+  for (_, fields) in docs.iter {
+    for (field_name, _) in fields.iter {
+      if field_name.size == 0 {
+        return Result.Error('Field name cannot be empty')
+      }
+    }
+  }
+
   let num_docs = docs.size
   let mut total_fields = 0
 
