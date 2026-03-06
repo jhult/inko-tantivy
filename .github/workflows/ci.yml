@@ -116,7 +116,7 @@ jobs:
           choco install inko
 
       - name: Download Native Library
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
         with:
           name: ${{ matrix.artifact }}
 
@@ -169,7 +169,7 @@ jobs:
     permissions:
       contents: write
     container:
-      image: ghcr.io/rust-cross/cargo-zigbuild:0.21.4
+      image: ghcr.io/rust-cross/cargo-zigbuild:sha-59b27c3
     strategy:
       matrix:
         include:
@@ -252,7 +252,7 @@ jobs:
           cp target/${{ matrix.target }}/release/${{ matrix.lib_name }} "release-files/${{ matrix.artifact_name }}_tantivy_c.${EXT}"
 
       - name: Upload Build Artifact
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: ${{ matrix.artifact_name }}_tantivy_c
           path: native/tantivy-c/release-files
