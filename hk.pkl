@@ -17,14 +17,18 @@ local linters = new Mapping<String, Step> {
         check = "license-eye header check {{files}}"
         fix = "license-eye header fix {{files}}"
     }
+    ["cargo-fmt"] {
+        glob = "**/*.rs"
+        check = "cd native/tantivy-c && cargo fmt --check"
+        fix = "cd native/tantivy-c && cargo fmt"
+    }
 }
 
-local hooks = new Mapping<String, Step> {
+hooks {
     ["pre-commit"] {
-        steps {
-            ["inko-fmt"] = linters["inko-fmt"]
-            ["license-eye"] = linters["license-eye"]
-        }
+        fix = true
+        stash = "git"
+        steps = linters
     }
     ["fix"] {
         fix = true

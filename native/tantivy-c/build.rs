@@ -21,21 +21,11 @@ fn main() {
 fn generate_ffi_constants(output_path: &PathBuf) {
     let mut output = File::create(output_path).expect("Failed to create ffi.inko");
 
-    writeln!(
-        output,
-        "# This Source Code Form is subject to the terms of the Mozilla Public"
-    )
-    .unwrap();
-    writeln!(
-        output,
-        "# License, v. 2.0. If a copy of the MPL was not distributed with this"
-    )
-    .unwrap();
-    writeln!(
-        output,
-        "# file, You can obtain one at https://mozilla.org/MPL/2.0/."
-    )
-    .unwrap();
+    writeln!(output, "# This Source Code Form is subject to the terms of the Mozilla Public")
+        .unwrap();
+    writeln!(output, "# License, v. 2.0. If a copy of the MPL was not distributed with this")
+        .unwrap();
+    writeln!(output, "# file, You can obtain one at https://mozilla.org/MPL/2.0/.").unwrap();
     writeln!(output, "#").unwrap();
     writeln!(output, "# Tantivy FFI bindings").unwrap();
     writeln!(output, "#").unwrap();
@@ -44,28 +34,13 @@ fn generate_ffi_constants(output_path: &PathBuf) {
         "# This module contains all FFI function declarations and C struct layout constants."
     )
     .unwrap();
-    writeln!(
-        output,
-        "# The struct layout constants are auto-generated from Rust code by build.rs"
-    )
-    .unwrap();
+    writeln!(output, "# The struct layout constants are auto-generated from Rust code by build.rs")
+        .unwrap();
     writeln!(output, "#").unwrap();
 
-    writeln!(
-        output,
-        "# Default buffer size for reading JSON from Tantivy"
-    )
-    .unwrap();
-    writeln!(
-        output,
-        "# Increased to 1MB to handle large documents with many fields"
-    )
-    .unwrap();
-    writeln!(
-        output,
-        "# If documents exceed this size, an error will be returned"
-    )
-    .unwrap();
+    writeln!(output, "# Default buffer size for reading JSON from Tantivy").unwrap();
+    writeln!(output, "# Increased to 1MB to handle large documents with many fields").unwrap();
+    writeln!(output, "# If documents exceed this size, an error will be returned").unwrap();
     writeln!(output, "let pub DEFAULT_JSON_BUFFER_SIZE = 1_048_576 # 1MB").unwrap();
     writeln!(output).unwrap();
 
@@ -79,11 +54,7 @@ fn generate_ffi_constants(output_path: &PathBuf) {
         "# 4KB should be sufficient for most fields while preventing excessive truncation"
     )
     .unwrap();
-    writeln!(
-        output,
-        "let pub DEFAULT_STRING_FIELD_BUFFER_SIZE = 4096 # 4KB"
-    )
-    .unwrap();
+    writeln!(output, "let pub DEFAULT_STRING_FIELD_BUFFER_SIZE = 4096 # 4KB").unwrap();
     writeln!(output).unwrap();
 
     writeln!(output, "# Buffer size for error messages from Rust").unwrap();
@@ -91,11 +62,7 @@ fn generate_ffi_constants(output_path: &PathBuf) {
     writeln!(output, "let pub TANTIVY_ERROR_BUFFER_SIZE = 1024 # 1KB").unwrap();
     writeln!(output).unwrap();
 
-    writeln!(
-        output,
-        "# FFI Struct layout constants (64-bit architecture)"
-    )
-    .unwrap();
+    writeln!(output, "# FFI Struct layout constants (64-bit architecture)").unwrap();
     writeln!(
         output,
         "# These are auto-generated from Rust struct definitions in native/tantivy-c/src/lib.rs"
@@ -108,11 +75,7 @@ fn generate_ffi_constants(output_path: &PathBuf) {
     .unwrap();
     writeln!(output).unwrap();
 
-    writeln!(
-        output,
-        "# Pointer size on 64-bit systems (all pointers are 8 bytes)"
-    )
-    .unwrap();
+    writeln!(output, "# Pointer size on 64-bit systems (all pointers are 8 bytes)").unwrap();
     writeln!(output, "let pub PTR_SIZE = 8").unwrap();
     writeln!(output).unwrap();
 
@@ -136,12 +99,7 @@ fn generate_ffi_constants(output_path: &PathBuf) {
         &[("doc_id", 0), ("score", 8), ("highlight", 16)],
     );
 
-    generate_struct_constants(
-        &mut output,
-        "AggregationResult",
-        16,
-        &[("key", 0), ("count", 8)],
-    );
+    generate_struct_constants(&mut output, "AggregationResult", 16, &[("key", 0), ("count", 8)]);
 
     generate_struct_constants(&mut output, "Suggestion", 16, &[("text", 0), ("score", 8)]);
 
@@ -158,11 +116,7 @@ fn generate_ffi_constants(output_path: &PathBuf) {
     writeln!(output, "import extern \"tantivy_c\"").unwrap();
     writeln!(output).unwrap();
 
-    writeln!(
-        output,
-        "# External FFI functions from the Tantivy C library"
-    )
-    .unwrap();
+    writeln!(output, "# External FFI functions from the Tantivy C library").unwrap();
     writeln!(output).unwrap();
 
     generate_ffi_function(
@@ -176,10 +130,7 @@ fn generate_ffi_constants(output_path: &PathBuf) {
     generate_ffi_function(
         &mut output,
         "tantivy_index_open",
-        &[
-            ("config", "Pointer[UInt8]"),
-            ("error_out", "Pointer[UInt8]"),
-        ],
+        &[("config", "Pointer[UInt8]"), ("error_out", "Pointer[UInt8]")],
         "Pointer[UInt8]",
         "",
     );
@@ -304,13 +255,7 @@ fn generate_ffi_constants(output_path: &PathBuf) {
         "",
     );
 
-    generate_ffi_function(
-        &mut output,
-        "tantivy_string_free",
-        &[("s", "Pointer[UInt8]")],
-        "",
-        "",
-    );
+    generate_ffi_function(&mut output, "tantivy_string_free", &[("s", "Pointer[UInt8]")], "", "");
 
     generate_ffi_function(
         &mut output,
@@ -399,10 +344,7 @@ fn generate_ffi_constants(output_path: &PathBuf) {
         "",
     );
 
-    println!(
-        "cargo:warning=Generated ffi.inko at {}",
-        output_path.display()
-    );
+    println!("cargo:warning=Generated ffi.inko at {}", output_path.display());
 }
 
 fn generate_struct_constants(
@@ -423,11 +365,8 @@ fn generate_struct_constants(
 
     for (field_name, offset) in fields {
         let field_name_for_offset = map_field_name_for_offset(field_name);
-        let offset_name = format!(
-            "{}_OFFSET_{}",
-            struct_prefix,
-            to_upper_snake_case(field_name_for_offset)
-        );
+        let offset_name =
+            format!("{}_OFFSET_{}", struct_prefix, to_upper_snake_case(field_name_for_offset));
         writeln!(output, "let pub {} = {}", offset_name, offset).unwrap();
     }
     writeln!(output).unwrap();
@@ -470,12 +409,7 @@ fn generate_ffi_function(
     if return_type.is_empty() {
         writeln!(output, "fn pub extern {}({})", name, param_list).unwrap();
     } else {
-        writeln!(
-            output,
-            "fn pub extern {}({}) -> {}",
-            name, param_list, return_type
-        )
-        .unwrap();
+        writeln!(output, "fn pub extern {}({}) -> {}", name, param_list, return_type).unwrap();
     }
     writeln!(output).unwrap();
 }

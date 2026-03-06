@@ -95,14 +95,8 @@ pub struct TantivyConfig {
 }
 
 const _: () = {
-    assert!(
-        mem::size_of::<TantivyConfig>() == 40,
-        "TantivyConfig size mismatch"
-    );
-    assert!(
-        offset_of!(TantivyConfig, index_path) == 0,
-        "TantivyConfig index_path offset mismatch"
-    );
+    assert!(mem::size_of::<TantivyConfig>() == 40, "TantivyConfig size mismatch");
+    assert!(offset_of!(TantivyConfig, index_path) == 0, "TantivyConfig index_path offset mismatch");
     assert!(
         offset_of!(TantivyConfig, reader_memory_budget_bytes) == 8,
         "TantivyConfig reader_memory_budget_bytes offset mismatch"
@@ -130,14 +124,8 @@ pub struct DocField {
 
 const _: () = {
     assert!(mem::size_of::<DocField>() == 16, "DocField size mismatch");
-    assert!(
-        offset_of!(DocField, key) == 0,
-        "DocField key offset mismatch"
-    );
-    assert!(
-        offset_of!(DocField, value) == 8,
-        "DocField value offset mismatch"
-    );
+    assert!(offset_of!(DocField, key) == 0, "DocField key offset mismatch");
+    assert!(offset_of!(DocField, value) == 8, "DocField value offset mismatch");
 };
 
 // Batch document structure
@@ -149,18 +137,9 @@ pub struct BatchDocument {
 }
 
 const _: () = {
-    assert!(
-        mem::size_of::<BatchDocument>() == 24,
-        "BatchDocument size mismatch"
-    );
-    assert!(
-        offset_of!(BatchDocument, doc_id) == 0,
-        "BatchDocument doc_id offset mismatch"
-    );
-    assert!(
-        offset_of!(BatchDocument, fields) == 8,
-        "BatchDocument fields offset mismatch"
-    );
+    assert!(mem::size_of::<BatchDocument>() == 24, "BatchDocument size mismatch");
+    assert!(offset_of!(BatchDocument, doc_id) == 0, "BatchDocument doc_id offset mismatch");
+    assert!(offset_of!(BatchDocument, fields) == 8, "BatchDocument fields offset mismatch");
     assert!(
         offset_of!(BatchDocument, num_fields) == 16,
         "BatchDocument num_fields offset mismatch"
@@ -176,22 +155,10 @@ pub struct TantivyResult {
 }
 
 const _: () = {
-    assert!(
-        mem::size_of::<TantivyResult>() == 24,
-        "TantivyResult size mismatch"
-    );
-    assert!(
-        offset_of!(TantivyResult, doc_id) == 0,
-        "TantivyResult doc_id offset mismatch"
-    );
-    assert!(
-        offset_of!(TantivyResult, score) == 8,
-        "TantivyResult score offset mismatch"
-    );
-    assert!(
-        offset_of!(TantivyResult, highlight) == 16,
-        "TantivyResult highlight offset mismatch"
-    );
+    assert!(mem::size_of::<TantivyResult>() == 24, "TantivyResult size mismatch");
+    assert!(offset_of!(TantivyResult, doc_id) == 0, "TantivyResult doc_id offset mismatch");
+    assert!(offset_of!(TantivyResult, score) == 8, "TantivyResult score offset mismatch");
+    assert!(offset_of!(TantivyResult, highlight) == 16, "TantivyResult highlight offset mismatch");
 };
 
 // Aggregation result structure
@@ -224,18 +191,9 @@ pub struct TantivySuggestion {
 }
 
 const _: () = {
-    assert!(
-        mem::size_of::<TantivySuggestion>() == 16,
-        "TantivySuggestion size mismatch"
-    );
-    assert!(
-        offset_of!(TantivySuggestion, text) == 0,
-        "TantivySuggestion text offset mismatch"
-    );
-    assert!(
-        offset_of!(TantivySuggestion, score) == 8,
-        "TantivySuggestion score offset mismatch"
-    );
+    assert!(mem::size_of::<TantivySuggestion>() == 16, "TantivySuggestion size mismatch");
+    assert!(offset_of!(TantivySuggestion, text) == 0, "TantivySuggestion text offset mismatch");
+    assert!(offset_of!(TantivySuggestion, score) == 8, "TantivySuggestion score offset mismatch");
 };
 
 // Schema configuration structures for JSON parsing
@@ -386,11 +344,8 @@ fn build_schema_from_json(json_str: &str) -> Result<(Schema, Vec<String>), Strin
         }
     }
 
-    let default_fields = if config.default_search_fields.is_empty() {
-        vec![]
-    } else {
-        config.default_search_fields
-    };
+    let default_fields =
+        if config.default_search_fields.is_empty() { vec![] } else { config.default_search_fields };
 
     Ok((schema, default_fields))
 }
@@ -438,10 +393,7 @@ unsafe fn c_str_to_string(ptr: *const c_char) -> Result<String, &'static str> {
     if ptr.is_null() {
         Ok(String::new())
     } else {
-        CStr::from_ptr(ptr)
-            .to_str()
-            .map(|s| s.to_string())
-            .map_err(|_| "Invalid UTF-8 in C string")
+        CStr::from_ptr(ptr).to_str().map(|s| s.to_string()).map_err(|_| "Invalid UTF-8 in C string")
     }
 }
 
@@ -596,11 +548,7 @@ pub(crate) fn create_error_string(msg: &str) -> *mut c_char {
     eprintln!("[TANTIVY_ERROR] {}", msg);
 
     // Sanitize for user-facing messages in release builds
-    let user_msg = if SANITIZE_ERRORS {
-        sanitize_error_message(msg)
-    } else {
-        msg.to_string()
-    };
+    let user_msg = if SANITIZE_ERRORS { sanitize_error_message(msg) } else { msg.to_string() };
 
     match CString::new(user_msg.as_str()) {
         Ok(c_str) => c_str.into_raw(),
@@ -669,10 +617,7 @@ fn document_to_json_map(
             json_map.insert("score".to_string(), serde_json::Value::Number(score_num));
         } else {
             // Fallback for NaN/Infinity
-            json_map.insert(
-                "score".to_string(),
-                serde_json::Value::String(score_val.to_string()),
-            );
+            json_map.insert("score".to_string(), serde_json::Value::String(score_val.to_string()));
         }
     }
 
@@ -732,10 +677,8 @@ pub unsafe extern "C" fn tantivy_index_open(
     let (schema, default_field_names) = if cfg.schema_json.is_null() {
         // Use default email schema
         let schema = email_schema();
-        let defaults = vec![
-            DEFAULT_SEARCH_FIELD_SUBJECT.to_string(),
-            DEFAULT_SEARCH_FIELD_BODY.to_string(),
-        ];
+        let defaults =
+            vec![DEFAULT_SEARCH_FIELD_SUBJECT.to_string(), DEFAULT_SEARCH_FIELD_BODY.to_string()];
         (schema, defaults)
     } else {
         // Parse custom schema from JSON
@@ -781,17 +724,14 @@ pub unsafe extern "C" fn tantivy_index_open(
     };
 
     // Create reader with memory budget
-    let reader = match index
-        .reader_builder()
-        .reload_policy(ReloadPolicy::OnCommitWithDelay)
-        .try_into()
-    {
-        Ok(r) => r,
-        Err(e) => {
-            *error_out = create_error_string(&format!("Failed to create reader: {}", e));
-            return std::ptr::null_mut();
-        }
-    };
+    let reader =
+        match index.reader_builder().reload_policy(ReloadPolicy::OnCommitWithDelay).try_into() {
+            Ok(r) => r,
+            Err(e) => {
+                *error_out = create_error_string(&format!("Failed to create reader: {}", e));
+                return std::ptr::null_mut();
+            }
+        };
 
     // Create writer with memory budget
     let writer = match index.writer(cfg.writer_memory_budget_bytes) {
@@ -1216,10 +1156,7 @@ pub unsafe extern "C" fn tantivy_index_delete_docs(
     }
 
     if error_count > 0 {
-        let msg = format!(
-            "Deleted {} documents with {} errors",
-            deleted_count, error_count
-        );
+        let msg = format!("Deleted {} documents with {} errors", deleted_count, error_count);
         *error_out = create_error_string(&msg);
     }
 
@@ -1857,10 +1794,7 @@ pub unsafe extern "C" fn tantivy_aggregate_terms(
 
     let results: Vec<TantivyAggregationResult> = mut_results
         .into_iter()
-        .map(|(key, count)| TantivyAggregationResult {
-            key: string_to_c_string(&key),
-            count,
-        })
+        .map(|(key, count)| TantivyAggregationResult { key: string_to_c_string(&key), count })
         .collect();
 
     // Transfer ownership to C using ManuallyDrop for safety
@@ -1901,10 +1835,7 @@ fn convert_suggestions_to_results(
 
     sorted_suggestions
         .into_iter()
-        .map(|(text, score)| TantivySuggestion {
-            text: string_to_c_string(&text),
-            score,
-        })
+        .map(|(text, score)| TantivySuggestion { text: string_to_c_string(&text), score })
         .collect()
 }
 
@@ -1992,10 +1923,7 @@ pub unsafe extern "C" fn tantivy_autocomplete(
 
     // Log parse errors for debugging but continue with the partial query
     if !errors.is_empty() {
-        eprintln!(
-            "Autocomplete parse warnings for '{}': {:?}",
-            query_str, errors
-        );
+        eprintln!("Autocomplete parse warnings for '{}': {:?}", query_str, errors);
     }
 
     let searcher = wrapper.reader.searcher();
@@ -2179,15 +2107,7 @@ pub unsafe extern "C" fn tantivy_get_facet_counts(
     num_results_out: *mut size_t,
     error_out: *mut *mut c_char,
 ) -> c_int {
-    tantivy_aggregate_terms(
-        index,
-        field_name,
-        query,
-        1000,
-        results_out,
-        num_results_out,
-        error_out,
-    )
+    tantivy_aggregate_terms(index, field_name, query, 1000, results_out, num_results_out, error_out)
 }
 
 // Simple ping function to check if the FFI library is loaded
@@ -2209,10 +2129,7 @@ mod tests {
 
         println!("TantivyConfig:");
         println!("  size: {}", mem::size_of::<TantivyConfig>());
-        println!(
-            "  offset(index_path): {}",
-            offset_of!(TantivyConfig, index_path)
-        );
+        println!("  offset(index_path): {}", offset_of!(TantivyConfig, index_path));
         println!(
             "  offset(reader_memory_budget_bytes): {}",
             offset_of!(TantivyConfig, reader_memory_budget_bytes)
@@ -2221,36 +2138,21 @@ mod tests {
             "  offset(writer_memory_budget_bytes): {}",
             offset_of!(TantivyConfig, writer_memory_budget_bytes)
         );
-        println!(
-            "  offset(num_threads): {}",
-            offset_of!(TantivyConfig, num_threads)
-        );
-        println!(
-            "  offset(schema_json): {}",
-            offset_of!(TantivyConfig, schema_json)
-        );
+        println!("  offset(num_threads): {}", offset_of!(TantivyConfig, num_threads));
+        println!("  offset(schema_json): {}", offset_of!(TantivyConfig, schema_json));
         println!();
 
         println!("TantivyResult:");
         println!("  size: {}", mem::size_of::<TantivyResult>());
         println!("  offset(doc_id): {}", offset_of!(TantivyResult, doc_id));
         println!("  offset(score): {}", offset_of!(TantivyResult, score));
-        println!(
-            "  offset(highlight): {}",
-            offset_of!(TantivyResult, highlight)
-        );
+        println!("  offset(highlight): {}", offset_of!(TantivyResult, highlight));
         println!();
 
         println!("TantivyAggregationResult:");
         println!("  size: {}", mem::size_of::<TantivyAggregationResult>());
-        println!(
-            "  offset(key): {}",
-            offset_of!(TantivyAggregationResult, key)
-        );
-        println!(
-            "  offset(count): {}",
-            offset_of!(TantivyAggregationResult, count)
-        );
+        println!("  offset(key): {}", offset_of!(TantivyAggregationResult, key));
+        println!("  offset(count): {}", offset_of!(TantivyAggregationResult, count));
         println!();
 
         println!("TantivySuggestion:");
@@ -2269,10 +2171,7 @@ mod tests {
         println!("  size: {}", mem::size_of::<BatchDocument>());
         println!("  offset(doc_id): {}", offset_of!(BatchDocument, doc_id));
         println!("  offset(fields): {}", offset_of!(BatchDocument, fields));
-        println!(
-            "  offset(num_fields): {}",
-            offset_of!(BatchDocument, num_fields)
-        );
+        println!("  offset(num_fields): {}", offset_of!(BatchDocument, num_fields));
         println!();
 
         println!("Pointer size (usize): {}", mem::size_of::<usize>());
@@ -2296,10 +2195,7 @@ mod tests {
         let sanitized = sanitize_error_message(msg);
 
         #[cfg(debug_assertions)]
-        assert_eq!(
-            sanitized,
-            "Error reading file at /home/user/tantivy/data/index"
-        );
+        assert_eq!(sanitized, "Error reading file at /home/user/tantivy/data/index");
 
         #[cfg(not(debug_assertions))]
         assert_eq!(sanitized, "Error reading file at <path>");
@@ -2311,10 +2207,7 @@ mod tests {
         let sanitized = sanitize_error_message(msg);
 
         #[cfg(debug_assertions)]
-        assert_eq!(
-            sanitized,
-            "Index at /var/lib/tantivy/index failed, trying /tmp/backup"
-        );
+        assert_eq!(sanitized, "Index at /var/lib/tantivy/index failed, trying /tmp/backup");
 
         #[cfg(not(debug_assertions))]
         assert_eq!(sanitized, "Index at <path> failed, trying <path>");
@@ -2370,10 +2263,7 @@ mod tests {
         let sanitized = sanitize_error_message(msg);
 
         #[cfg(debug_assertions)]
-        assert_eq!(
-            sanitized,
-            "Error at /var/lib/tantivy/index space after path"
-        );
+        assert_eq!(sanitized, "Error at /var/lib/tantivy/index space after path");
 
         #[cfg(not(debug_assertions))]
         assert_eq!(sanitized, "Error at <path> space after path");
@@ -2407,16 +2297,10 @@ mod tests {
         let sanitized = sanitize_error_message(msg);
 
         #[cfg(debug_assertions)]
-        assert_eq!(
-            sanitized,
-            "Failed to open index at /var/lib/tantivy/index: Permission denied"
-        );
+        assert_eq!(sanitized, "Failed to open index at /var/lib/tantivy/index: Permission denied");
 
         #[cfg(not(debug_assertions))]
-        assert_eq!(
-            sanitized,
-            "Failed to open index at <path>: Permission denied"
-        );
+        assert_eq!(sanitized, "Failed to open index at <path>: Permission denied");
     }
 
     #[test]
@@ -2425,10 +2309,7 @@ mod tests {
         let sanitized = sanitize_error_message(msg);
 
         #[cfg(debug_assertions)]
-        assert_eq!(
-            sanitized,
-            "Error at /usr/local/lib/tantivy/data/backup/index"
-        );
+        assert_eq!(sanitized, "Error at /usr/local/lib/tantivy/data/backup/index");
 
         #[cfg(not(debug_assertions))]
         assert_eq!(sanitized, "Error at <path>");
