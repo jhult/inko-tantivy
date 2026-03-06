@@ -17,7 +17,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 tantivy = "^0.25"
-libc = "^0.2.181"
+libc = "^0.2.182"
 regex = "1.12"
 
 [dependencies.serde]
