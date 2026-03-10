@@ -22,7 +22,7 @@ jobs:
     name: Rust Security Audit
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/rust-cross/cargo-zigbuild:0.21.4
+      image: ghcr.io/rust-cross/cargo-zigbuild:sha-59b27c3
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
@@ -238,16 +238,6 @@ jobs:
 
       - name: Build Rust cdylib
         working-directory: native/tantivy-c
-        env:
-          # Use zig cc for all cross-compile targets to avoid native compiler dependencies
-          CC_x86_64_pc_windows_gnu: "zig cc -target x86_64-windows-gnu"
-          CXX_x86_64_pc_windows_gnu: "zig c++ -target x86_64-windows-gnu"
-          CC_aarch64_unknown_linux_gnu: "zig cc -target aarch64-linux-gnu"
-          CXX_aarch64_unknown_linux_gnu: "zig c++ -target aarch64-linux-gnu"
-          CC_x86_64_apple_darwin: "zig cc -target x86_64-macos-none"
-          CXX_x86_64_apple_darwin: "zig c++ -target x86_64-macos-none"
-          CC_aarch64_apple_darwin: "zig cc -target aarch64-macos-none"
-          CXX_aarch64_apple_darwin: "zig c++ -target aarch64-macos-none"
         run: |
           cargo zigbuild --release --target ${{ matrix.target }}
 

@@ -20,11 +20,10 @@ tantivy = "^0.25"
 libc = "^0.2.182"
 regex = "1.12"
 
-# Disable zstd legacy format support to avoid cross-compile issues with zigbuild
 [dependencies.zstd-sys]
 version = "2"
 default-features = false
-features = ["zdict_builder"]
+features = ["cmake", "legacy", "zdict_builder", "experimental"]
 
 [dependencies.serde]
 version = "1.0"
@@ -32,3 +31,6 @@ features = ["derive"]
 
 [dependencies.serde_json]
 version = "1.0"
+
+[patch.crates-io]
+zstd-sys = { git = "https://github.com/jhult/zstd-rs.git", branch = "feat/cmake" }
