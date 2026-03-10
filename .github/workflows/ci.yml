@@ -115,6 +115,7 @@ jobs:
       - name: Check Formatting and Run Tests
         run: |
           export LIBRARY_PATH=.
+          export LD_LIBRARY_PATH=.
           export DYLD_LIBRARY_PATH=.
           inko --version
           inko fmt --check
@@ -124,6 +125,7 @@ jobs:
         continue-on-error: true
         run: |
           export LIBRARY_PATH=.
+          export LD_LIBRARY_PATH=.
           export DYLD_LIBRARY_PATH=.
           echo "Running performance benchmarks (informational only)..."
           ./run_benchmarks.sh || echo "Benchmarks completed with issues"
