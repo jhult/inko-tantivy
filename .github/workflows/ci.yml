@@ -226,6 +226,10 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-build-target-
 
+      - name: Install CMake
+        run: |
+          apt-get update -y && apt-get install -y cmake
+
       - name: Run cargo test
         working-directory: native/tantivy-c
         run: |
