@@ -228,7 +228,7 @@ jobs:
 
       - name: Install CMake
         run: |
-          apt-get update -y && apt-get install -y cmake
+          apt-get update -y && apt-get install -y --no-install-recommends --no-install-suggests cmake
 
       - name: Install clippy
         run: rustup component add clippy

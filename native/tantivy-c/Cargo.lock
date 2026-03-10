@@ -1467,7 +1467,7 @@ dependencies = [
 [[package]]
 name = "zstd-sys"
 version = "2.0.16+zstd.1.5.7"
-source = "git+https://github.com/jhult/zstd-rs.git?branch=feat%2Fcmake#e77a2ef364a1ff4e51c35ebddef7b1606c5e55d9"
+source = "git+https://github.com/jhult/zstd-rs.git?branch=feat%2Fcmake#c86b3445564d10cc6718682d09da66cb3f79cb93"
 dependencies = [
  "cmake",
  "pkg-config",
