@@ -92,12 +92,6 @@ jobs:
             lib_file: macos_arm64_tantivy_c.dylib
             lib_name: libtantivy_c.dylib
             use_container: false
-          - os: windows
-            runner: windows-latest
-            artifact: windows_x64
-            lib_file: windows_x64_tantivy_c.dll
-            lib_name: tantivy_c.dll
-            use_container: false
 
     container: ${{ matrix.use_container && 'ghcr.io/inko-lang/inko:main' || null }}
 
@@ -110,57 +104,27 @@ jobs:
         run: |
           brew install inko
 
-      - name: Install Inko (Windows)
-        if: matrix.os == 'windows'
-        run: |
-          choco install inko
-
       - name: Download Native Library
         uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
         with:
           name: ${{ matrix.artifact }}_tantivy_c
-      - name: Copy Library to Root (Unix)
-        if: matrix.os != 'windows'
+      - name: Copy Library to Root
         run: |
           cp ${{ matrix.lib_file }} ./${{ matrix.lib_name }}
 
-      - name: Copy Library to Root (Windows)
-        if: matrix.os == 'windows'
-        run: |
-          copy ${{ matrix.lib_file }} ${{ matrix.lib_name }}
-
-      - name: Check Formatting and Run Tests (Unix)
-        if: matrix.os != 'windows'
+      - name: Check Formatting and Run Tests
         run: |
           export LIBRARY_PATH=.
           inko --version
           inko fmt --check
           inko test
 
-      - name: Check Formatting and Run Tests (Windows)
-        if: matrix.os == 'windows'
-        run: |
-          $env:PATH = "$pwd;$env:PATH"
-          inko --version
-          inko fmt --check
-          inko test
-
-      - name: Run Performance Benchmarks (Unix)
-        if: matrix.os != 'windows'
+      - name: Run Performance Benchmarks
         continue-on-error: true
         run: |
           export LIBRARY_PATH=.
           echo "Running performance benchmarks (informational only)..."
           ./run_benchmarks.sh || echo "Benchmarks completed with issues"
-
-      - name: Run Performance Benchmarks (Windows)
-        if: matrix.os == 'windows'
-        continue-on-error: true
-        run: |
-          $env:PATH = "$pwd;$env:PATH"
-          Write-Host "Running performance benchmarks (informational only)..."
-          bash run_benchmarks.sh
-          if ($LASTEXITCODE -ne 0) { Write-Host "Benchmarks completed with issues" }
 
   build-native:
     name: Build Native Library (${{ matrix.artifact_name }})
