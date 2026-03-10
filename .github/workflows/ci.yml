@@ -93,7 +93,7 @@ jobs:
             lib_name: libtantivy_c.dylib
             use_container: false
 
-    container: ${{ matrix.use_container && 'ghcr.io/inko-lang/inko:main' || null }}
+    container: ${{ matrix.use_container && 'ghcr.io/inko-lang/inko:0.19.1' || null }}
 
     steps:
       - name: Checkout
