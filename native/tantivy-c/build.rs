@@ -3,6 +3,7 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 use std::env;
+use std::fs;
 use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
@@ -344,6 +345,11 @@ fn generate_ffi_constants(output_path: &PathBuf) {
         "",
     );
 
+    // Trim trailing newline to match inko fmt expectations
+    drop(output);
+    let content = fs::read_to_string(output_path).unwrap();
+    fs::write(output_path, content.trim_end_matches('\n').to_owned() + "\n").unwrap();
+
     println!("cargo:warning=Generated ffi.inko at {}", output_path.display());
 }
 
@@ -396,20 +402,46 @@ fn generate_ffi_function(
     return_type: &str,
     comment: &str,
 ) {
+    const MAX_LINE_LENGTH: usize = 80;
+
     if !comment.is_empty() {
         writeln!(output, "# {}", comment).unwrap();
     }
 
-    let param_list = params
-        .iter()
-        .map(|(name, typ)| format!("{}: {}", name, typ))
-        .collect::<Vec<_>>()
-        .join(", ");
-
-    if return_type.is_empty() {
-        writeln!(output, "fn pub extern {}({})", name, param_list).unwrap();
+    if params.is_empty() {
+        // No params: omit parentheses (inko fmt style)
+        if return_type.is_empty() {
+            writeln!(output, "fn pub extern {}", name).unwrap();
+        } else {
+            writeln!(output, "fn pub extern {} -> {}", name, return_type).unwrap();
+        }
     } else {
-        writeln!(output, "fn pub extern {}({}) -> {}", name, param_list, return_type).unwrap();
+        let param_list = params
+            .iter()
+            .map(|(name, typ)| format!("{}: {}", name, typ))
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        let single_line = if return_type.is_empty() {
+            format!("fn pub extern {}({})", name, param_list)
+        } else {
+            format!("fn pub extern {}({}) -> {}", name, param_list, return_type)
+        };
+
+        if single_line.len() <= MAX_LINE_LENGTH {
+            writeln!(output, "{}", single_line).unwrap();
+        } else {
+            // Multi-line format: each param on its own indented line
+            writeln!(output, "fn pub extern {}(", name).unwrap();
+            for (pname, ptype) in params {
+                writeln!(output, "  {}: {},", pname, ptype).unwrap();
+            }
+            if return_type.is_empty() {
+                writeln!(output, ")").unwrap();
+            } else {
+                writeln!(output, ") -> {}", return_type).unwrap();
+            }
+        }
     }
     writeln!(output).unwrap();
 }
