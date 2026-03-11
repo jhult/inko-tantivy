@@ -265,16 +265,16 @@ fn pub get_docs(
           let mut j = 0
 
           while j < num_results {
-            let doc_ptr_addr = (results_ptr as Int) + (j * PTR_SIZE)
-            let doc_ptr = doc_ptr_addr as Pointer[UInt8]
+            # Read the pointer value stored at position j in the results array
+            let slot_addr = (results_ptr as Int) + (j * PTR_SIZE)
+            let doc_ptr = read_usize(slot_addr as Pointer[UInt8])
+              as Pointer[UInt8]
 
             let doc_json = if (doc_ptr as Int) != 0 {
               let (json_str, truncated) = c_pointer_to_string_checked(
                 doc_ptr,
                 json_buffer_size,
               )
-
-              tantivy_string_free(doc_ptr)
 
               if truncated {
                 # Return error indicator for truncated document
@@ -291,7 +291,7 @@ fn pub get_docs(
           }
         }
 
-        # Free the results array
+        # Free the results array (also frees individual strings)
         tantivy_docs_array_free(results_ptr, num_results as Int64)
 
         Result.Ok(documents)
