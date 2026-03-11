@@ -2,7 +2,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-import helpers (ffi_available)
+import helpers (cleanup_test_index, ffi_available, temp_index_path)
 import std.test (Tests)
 import tantivy.index_manager (TantivyIndexManager)
 import tantivy.types (TantivyConfig)
@@ -11,8 +11,9 @@ fn pub tests(t: mut Tests) {
   if !ffi_available { return }
 
   t.test('Repeated search operations complete successfully', fn (t) {
+    let path = temp_index_path('memory-leaks-search')
     let manager = TantivyIndexManager.new(
-      match TantivyConfig.new('/tmp/test-memory-leaks-search') {
+      match TantivyConfig.new(path) {
         case Ok(c) -> c
         case Error(_) -> {
           t.true(false)
@@ -51,11 +52,14 @@ fn pub tests(t: mut Tests) {
       }
       case Error(_) -> {}
     }
+
+    cleanup_test_index(path)
   })
 
   t.test('Repeated autocomplete operations complete successfully', fn (t) {
+    let path = temp_index_path('memory-leaks-autocomplete')
     let manager = TantivyIndexManager.new(
-      match TantivyConfig.new('/tmp/test-memory-leaks-autocomplete') {
+      match TantivyConfig.new(path) {
         case Ok(c) -> c
         case Error(_) -> {
           t.true(false)
@@ -94,11 +98,14 @@ fn pub tests(t: mut Tests) {
       }
       case Error(_) -> {}
     }
+
+    cleanup_test_index(path)
   })
 
   t.test('Index close and reopen works correctly', fn (t) {
+    let path = temp_index_path('memory-leaks-reopen')
     let manager = TantivyIndexManager.new(
-      match TantivyConfig.new('/tmp/test-memory-leaks-reopen') {
+      match TantivyConfig.new(path) {
         case Ok(c) -> c
         case Error(_) -> {
           t.true(false)
@@ -130,11 +137,14 @@ fn pub tests(t: mut Tests) {
       }
       case Error(_) -> {}
     }
+
+    cleanup_test_index(path)
   })
 
   t.test('Repeated add_doc operations complete successfully', fn (t) {
+    let path = temp_index_path('memory-leaks-add-doc')
     let manager = TantivyIndexManager.new(
-      match TantivyConfig.new('/tmp/test-memory-leaks-add-doc') {
+      match TantivyConfig.new(path) {
         case Ok(c) -> c
         case Error(_) -> {
           t.true(false)
@@ -164,5 +174,7 @@ fn pub tests(t: mut Tests) {
       }
       case Error(_) -> {}
     }
+
+    cleanup_test_index(path)
   })
 }

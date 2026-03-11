@@ -36,8 +36,8 @@ fn pub tests(t: mut Tests) {
     match manager.open {
       case Ok(_) -> {
         # Add two documents
-        let fields1 = [('title', 'Test'), ('body', 'Content')]
-        let fields2 = [('title', 'Test'), ('body', 'Content')]
+        let fields1 = [('subject', 'Test'), ('body', 'Content')]
+        let fields2 = [('subject', 'Test'), ('body', 'Content')]
 
         match manager.add_doc('exists-1', fields1) {
           case Ok(_) -> {

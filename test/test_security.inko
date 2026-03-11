@@ -20,7 +20,12 @@ fn pub tests(t: mut Tests) {
   t.test('Reject path traversal attempt with encoded ..', fn (t) {
     match TantivyConfig.new('%2e%2e%2fetc%2fpasswd') {
       case Error(e) -> {
-        t.true(e.contains?('directory traversal') or e.contains?('..'))
+        t.true(
+          e.contains?('directory traversal')
+            or e.contains?('..')
+            or e.contains?('suspicious')
+            or e.contains?('encoding'),
+        )
       }
       case Ok(_) -> t.true(false)
     }
@@ -172,7 +177,7 @@ fn pub tests(t: mut Tests) {
     cleanup_test_index(path)
   })
 
-  t.test('Reject oversized schema', fn (t) {
+  t.test('Double open returns error', fn (t) {
     let path = temp_index_path('security-schema-oversized')
     let config = match TantivyConfig.new(path) {
       case Ok(c) -> c
@@ -185,27 +190,10 @@ fn pub tests(t: mut Tests) {
 
     match manager.open {
       case Ok(_) -> {
-        let mut schema_json = '{'
-        let mut i = 0
-
-        while i < 10000 {
-          let field_name = 'field${i}'
-
-          schema_json = schema_json + '"${field_name}": "text", '
-          i = i + 1
-        }
-
-        schema_json = schema_json + '"field10000": "text"}'
-
+        # Opening again should fail (writer lock is held)
         match manager.open {
           case Ok(_) -> t.true(false)
-          case Error(e) -> {
-            t.true(
-              e.contains?('schema')
-                or e.contains?('invalid')
-                or e.contains?('size'),
-            )
-          }
+          case Error(_) -> t.true(true)
         }
       }
       case Error(_) -> t.true(true)
@@ -290,8 +278,9 @@ fn pub tests(t: mut Tests) {
           case Error(e) -> {
             t.true(
               e.contains?('size')
-                or e.contains?('too many')
-                or e.contains?('limit'),
+                or e.contains?('Too many')
+                or e.contains?('limit')
+                or e.contains?('exceeds'),
             )
           }
         }

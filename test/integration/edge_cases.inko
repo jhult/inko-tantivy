@@ -28,7 +28,7 @@ fn pub tests(t: mut Tests) {
 
     match manager.open {
       case Ok(_) -> {
-        let fields = [('title', 'Test'), ('body', 'Content')]
+        let fields = [('subject', 'Test'), ('body', 'Content')]
 
         # Empty doc_id should be rejected or handled gracefully
         match manager.add_doc('', fields) {
@@ -70,7 +70,10 @@ fn pub tests(t: mut Tests) {
     match manager.open {
       case Ok(_) -> {
         # Add and commit a document first
-        let fields1 = [('title', 'Committed'), ('body', 'This should be found')]
+        let fields1 = [
+          ('subject', 'Committed'),
+          ('body', 'This should be found'),
+        ]
 
         match manager.add_doc('committed-doc', fields1) {
           case Ok(_) -> {
@@ -78,7 +81,7 @@ fn pub tests(t: mut Tests) {
               case Ok(_) -> {
                 # Add another document but rollback
                 let fields2 = [
-                  ('title', 'Rolled Back'),
+                  ('subject', 'Rolled Back'),
                   ('body', 'This should NOT be found'),
                 ]
 
@@ -157,7 +160,7 @@ fn pub tests(t: mut Tests) {
 
     match manager.open {
       case Ok(_) -> {
-        let fields = [('title', 'Test'), ('body', 'Content')]
+        let fields = [('subject', 'Test'), ('body', 'Content')]
 
         match manager.add_doc('test-doc', fields) {
           case Ok(_) -> {

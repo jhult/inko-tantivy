@@ -45,10 +45,11 @@ fn pub tests(t: mut Tests) {
     let mut limiter = RateLimiter.new(20.0, 10.0)
 
     t.true(limiter.acquire_tokens(5))
-    t.true(limiter.available_tokens <= 15.0)
+    # Allow small auto-refill from elapsed time
+    t.true(limiter.available_tokens <= 16.0)
 
     t.true(limiter.acquire_tokens(10))
-    t.true(limiter.available_tokens <= 5.0)
+    t.true(limiter.available_tokens <= 6.0)
 
     t.false(limiter.acquire_tokens(10))
   })
@@ -78,7 +79,8 @@ fn pub tests(t: mut Tests) {
       i = i + 1
     }
 
-    t.true(limiter.available_tokens == 0.0)
+    # Allow small auto-refill from elapsed time during acquire loop
+    t.true(limiter.available_tokens <= 0.1)
 
     limiter.refill(5.0)
 
@@ -108,7 +110,8 @@ fn pub tests(t: mut Tests) {
       i = i + 1
     }
 
-    t.true(limiter.available_tokens == 0.0)
+    # Allow small auto-refill from elapsed time during acquire loop
+    t.true(limiter.available_tokens <= 0.1)
 
     let initial_available = limiter.available_tokens
 

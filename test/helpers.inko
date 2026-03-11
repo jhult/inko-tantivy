@@ -42,8 +42,12 @@ fn pub trim_trailing_slash(path: String) -> String {
 
 # Helper to create a temporary test index directory
 # Takes a unique identifier (e.g., test name or number) to avoid conflicts
+# Automatically cleans up any leftover directory from previous runs
 fn pub temp_index_path(unique_id: String) -> String {
-  '${get_temp_dir}/tantivy-test-${unique_id}'
+  let path = '${get_temp_dir}/tantivy-test-${unique_id}'
+
+  cleanup_test_index(path)
+  path
 }
 
 # Check if FFI backend is available and working

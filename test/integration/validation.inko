@@ -134,7 +134,7 @@ fn pub tests(t: mut Tests) {
 
         let large_value = buffer.into_string
 
-        let fields = [('large_field', large_value)]
+        let fields = [('body', large_value)]
 
         match manager.add_doc('max-value', fields) {
           case Ok(_) -> t.true(true)
@@ -162,8 +162,9 @@ fn pub tests(t: mut Tests) {
 
     match manager.open {
       case Ok(_) -> {
-        # Create a 10MB + 1 byte field value (MAX_FIELD_VALUE_LENGTH + 1)
+        # Create a value exceeding MAX_FIELD_VALUE_LENGTH (10 * 1024 * 1024 = 10485760 bytes)
         # Use StringBuffer with chunking for O(n) allocation instead of O(n²) string concat
+        # 105 chunks * 100_000 bytes = 10_500_000 bytes > 10_485_760
         let chunk = {
           let mut chunk_buf = StringBuffer.new
           let mut i = 0
@@ -179,16 +180,14 @@ fn pub tests(t: mut Tests) {
         let mut buffer = StringBuffer.new
         let mut j = 0
 
-        while j < 100 {
+        while j < 105 {
           buffer.push(chunk)
           j = j + 1
         }
 
-        buffer.push('x')
-
         let large_value = buffer.into_string
 
-        let fields = [('too_large_field', large_value)]
+        let fields = [('body', large_value)]
 
         match manager.add_doc('too-large-value', fields) {
           case Ok(_) -> t.true(false)

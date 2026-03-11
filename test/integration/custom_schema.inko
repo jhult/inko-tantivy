@@ -16,6 +16,7 @@ fn pub tests(t: mut Tests) {
     let path = temp_index_path('custom-schema-001')
     let schema_json = '{
       "fields": [
+        {"name": "id", "type": "string", "indexed": true, "stored": true},
         {"name": "title", "type": "text", "indexed": true, "stored": true},
         {"name": "content", "type": "text", "indexed": true, "stored": true}
       ],
@@ -63,6 +64,7 @@ fn pub tests(t: mut Tests) {
     let path = temp_index_path('custom-schema-002')
     let schema_json = '{
       "fields": [
+        {"name": "id", "type": "string", "indexed": true, "stored": true},
         {"name": "title", "type": "text", "indexed": true, "stored": true},
         {"name": "content", "type": "text", "indexed": true, "stored": true}
       ],
@@ -118,6 +120,7 @@ fn pub tests(t: mut Tests) {
     let path = temp_index_path('custom-schema-003')
     let schema_json = '{
       "fields": [
+        {"name": "id", "type": "string", "indexed": true, "stored": true},
         {"name": "name", "type": "text", "indexed": true, "stored": true},
         {"name": "description", "type": "text", "indexed": true, "stored": true},
         {"name": "price", "type": "f64", "indexed": true, "stored": true},
@@ -181,6 +184,7 @@ fn pub tests(t: mut Tests) {
     let path = temp_index_path('custom-schema-004')
     let schema_json = '{
       "fields": [
+        {"name": "id", "type": "string", "indexed": true, "stored": true},
         {"name": "timestamp", "type": "u64", "indexed": true, "stored": true},
         {"name": "level", "type": "string", "indexed": true, "stored": true},
         {"name": "message", "type": "text", "indexed": true, "stored": true}
@@ -233,7 +237,8 @@ fn pub tests(t: mut Tests) {
     let path = temp_index_path('custom-schema-005')
     let schema_json = '{
       "fields": [
-        {"name": "id", "type": "i64", "indexed": true, "stored": true},
+        {"name": "id", "type": "string", "indexed": true, "stored": true},
+        {"name": "record_id", "type": "i64", "indexed": true, "stored": true},
         {"name": "name", "type": "text", "indexed": true, "stored": true}
       ],
       "default_search_fields": ["name"]
@@ -261,7 +266,7 @@ fn pub tests(t: mut Tests) {
 
     match manager.open {
       case Ok(_) -> {
-        let fields = [('id', '-12345'), ('name', 'Test Item')]
+        let fields = [('record_id', '-12345'), ('name', 'Test Item')]
 
         match manager.add_doc('item-1', fields) {
           case Ok(_) -> t.true(true)
@@ -276,7 +281,7 @@ fn pub tests(t: mut Tests) {
     cleanup_test_index(path)
   })
 
-  t.test('Schema validation rejects invalid JSON', fn (t) {
+  t.test('Schema validation rejects invalid JSON on open', fn (t) {
     let path = temp_index_path('custom-schema-006')
     let schema_json = '{invalid json'
 
@@ -289,18 +294,39 @@ fn pub tests(t: mut Tests) {
       }
     }
 
-    match config.with_schema_json(schema_json) {
-      case Ok(_) -> t.true(false)
-      case Error(_) -> t.true(true)
+    # with_schema_json stores the schema without validation
+    let config_with_schema = match config.with_schema_json(schema_json) {
+      case Ok(c) -> c
+      case Error(_) -> {
+        # If it rejects here, that's also acceptable
+        cleanup_test_index(path)
+        t.true(true)
+        return
+      }
     }
 
-    cleanup_test_index(path)
+    # Validation happens at open time
+    let mut manager = TantivyIndexManager.new(config_with_schema)
+
+    match manager.open {
+      case Ok(_) -> {
+        let _ = manager.close
+
+        cleanup_test_index(path)
+        t.true(false)
+      }
+      case Error(_) -> {
+        cleanup_test_index(path)
+        t.true(true)
+      }
+    }
   })
 
   t.test('Multi-field search with custom schema', fn (t) {
     let path = temp_index_path('custom-schema-007')
     let schema_json = '{
       "fields": [
+        {"name": "id", "type": "string", "indexed": true, "stored": true},
         {"name": "title", "type": "text", "indexed": true, "stored": true},
         {"name": "author", "type": "string", "indexed": true, "stored": true},
         {"name": "content", "type": "text", "indexed": true, "stored": true}
@@ -408,72 +434,66 @@ fn pub tests(t: mut Tests) {
     cleanup_test_index(path)
   })
 
-  t.test(
-    'Schema mismatch: string value for u64 field is silently skipped',
-    fn (t) {
-      let path = temp_index_path('schema-mismatch-001')
-      let schema_json = '{
+  t.test('Schema mismatch: string value for u64 field returns error', fn (t) {
+    let path = temp_index_path('schema-mismatch-001')
+    let schema_json = '{
       "fields": [
+        {"name": "id", "type": "string", "indexed": true, "stored": true},
         {"name": "title", "type": "text", "indexed": true, "stored": true},
         {"name": "count", "type": "u64", "indexed": true, "stored": true}
       ],
       "default_search_fields": ["title"]
     }'
 
-      let config = match TantivyConfig.new(path) {
-        case Ok(c) -> c
-        case Error(_) -> {
-          cleanup_test_index(path)
-          t.true(false)
-          return
-        }
+    let config = match TantivyConfig.new(path) {
+      case Ok(c) -> c
+      case Error(_) -> {
+        cleanup_test_index(path)
+        t.true(false)
+        return
       }
+    }
 
-      let config_with_schema = match config.with_schema_json(schema_json) {
-        case Ok(c) -> c
-        case Error(_) -> {
-          cleanup_test_index(path)
-          t.true(false)
-          return
-        }
+    let config_with_schema = match config.with_schema_json(schema_json) {
+      case Ok(c) -> c
+      case Error(_) -> {
+        cleanup_test_index(path)
+        t.true(false)
+        return
       }
+    }
 
-      let mut manager = TantivyIndexManager.new(config_with_schema)
+    let mut manager = TantivyIndexManager.new(config_with_schema)
 
-      match manager.open {
-        case Ok(_) -> {
-          # String value for u64 field - should be silently skipped
-          let fields = [('title', 'Test'), ('count', 'not-a-number')]
+    match manager.open {
+      case Ok(_) -> {
+        # String value for u64 field - returns an error (type mismatch)
+        let fields = [('title', 'Test'), ('count', 'not-a-number')]
 
-          match manager.add_doc('doc-1', fields) {
-            case Ok(_) -> {
-              # Document should still be added, just without the count field
-              let _ = manager.commit
-
-              match manager.get_doc('doc-1') {
-                case Ok(doc) -> {
-                  # Title should be present, count should be missing
-                  t.true(doc.contains?('Test') or doc.contains?('title'))
-                }
-                case Error(_) -> t.true(false)
-              }
-            }
-            case Error(_) -> t.true(false)
+        match manager.add_doc('doc-1', fields) {
+          case Ok(_) -> t.true(false)
+          case Error(e) -> {
+            t.true(
+              e.contains?('u64')
+                or e.contains?('not a valid')
+                or e.contains?('count'),
+            )
           }
         }
-        case Error(_) -> t.true(false)
       }
+      case Error(_) -> t.true(false)
+    }
 
-      let _ = manager.close
+    let _ = manager.close
 
-      cleanup_test_index(path)
-    },
-  )
+    cleanup_test_index(path)
+  })
 
   t.test('Schema mismatch: string value for bool field', fn (t) {
     let path = temp_index_path('schema-mismatch-002')
     let schema_json = '{
       "fields": [
+        {"name": "id", "type": "string", "indexed": true, "stored": true},
         {"name": "title", "type": "text", "indexed": true, "stored": true},
         {"name": "active", "type": "bool", "indexed": true, "stored": true}
       ],
@@ -530,6 +550,7 @@ fn pub tests(t: mut Tests) {
     let path = temp_index_path('schema-mismatch-003')
     let schema_json = '{
       "fields": [
+        {"name": "id", "type": "string", "indexed": true, "stored": true},
         {"name": "title", "type": "text", "indexed": true, "stored": true}
       ],
       "default_search_fields": ["title"]

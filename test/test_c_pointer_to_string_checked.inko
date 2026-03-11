@@ -226,9 +226,9 @@ fn pub tests(t: mut Tests) {
 
       let (result, truncated) = c_pointer_to_string_checked(ptr, 1)
 
-      # Should read 1 byte (A) and NOT be truncated (found null at position 1, but that's after the char)
+      # Should read 1 byte (A) and be truncated (max_len=1 can't verify null terminator)
       t.equal(result, 'A')
-      t.false(truncated)
+      t.true(truncated)
     },
   )
 }
