@@ -81,7 +81,8 @@ impl TantivyQueryBuilder {
 # Both versions must be kept in sync. Any changes to the special character
 # list must be applied to both locations.
 #
-# Full list of Tantivy/Lucene special chars: " ' + - ( ) [ ] : * ? \ ^ ~ { } | ! and space
+# Current escaped set (must match lib.rs::escape_query_string):
+#   " ' + - ( ) [ ] : * ? \ space ^ ~ { } | !
 fn escape_query_string(s: String) -> String {
   let mut buffer = StringBuffer.new
 

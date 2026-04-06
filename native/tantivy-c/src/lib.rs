@@ -406,13 +406,14 @@ fn string_to_c_string(s: &str) -> *mut c_char {
     }
 }
 
-// Helper: Escape special characters in query strings to prevent injection (CWE-78)
+// Helper: Escape special characters in query strings to prevent query injection
 //
 // NOTE: This function is duplicated in src/tantivy/query_builder.inko
 // Both versions must be kept in sync. Any changes to the special character
 // list must be applied to both locations.
 //
-// Full list of Tantivy/Lucene special chars: " ' + - ( ) [ ] : * ? \ ^ ~ { } | ! and whitespace
+// Current escaped set (must match query_builder.inko::is_special_char):
+//   " ' + - ( ) [ ] : * ? \ space ^ ~ { } | !
 fn escape_query_string(s: &str) -> String {
     let mut result = String::with_capacity(s.len() * 2);
     for c in s.chars() {
