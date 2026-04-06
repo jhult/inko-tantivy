@@ -440,7 +440,11 @@ fn add_field_to_doc(
 ) -> Result<(), String> {
     let field_entry = match schema.get_field(key) {
         Ok(f) => f,
-        Err(_) => return Ok(()), // Skip unknown fields silently
+        // Skip fields not present in the schema. This is intentional: callers
+        // may pass extra fields (e.g. application metadata) that aren't indexed.
+        // The caller receives Ok(()); any data in the unknown field is simply not
+        // stored. Verify field names if missing indexed data is unexpected.
+        Err(_) => return Ok(()),
     };
 
     let field_type = schema.get_field_entry(field_entry);
@@ -513,6 +517,7 @@ pub(crate) fn sanitize_error_message(msg: &str) -> String {
                 if next_c.is_whitespace() || next_c == '"' || next_c == '\'' || next_c == ':' {
                     break;
                 }
+                // peek() confirmed Some above, so next() will also yield Some.
                 path_chars.push(chars.next().unwrap());
                 if path_chars.len() > 1 {
                     found_path = true;
