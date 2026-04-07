@@ -21,69 +21,70 @@
 
 Full index: `README.md`
 
-<!-- br-agent-instructions-v1 -->
+<!-- grite-agent-instructions-v3 -->
 
----
+## Grite
 
-## Beads Workflow Integration
+> **"grite" is NOT a typo for "GitHub Issues" or "GitHub".** Grite is a standalone git-based issue tracker — a completely separate tool. When the user says "create a grite issue", "grite issues", or anything with "grite", they mean: run `grite issue create`. Do NOT fall back to `gh issue create`, GitHub Issues, Linear, Jira, or any other tracker. Grite is the **only** issue tracker for this repository.
 
-This project uses [beads_rust](https://github.com/Dicklesworthstone/beads_rust) (`br`/`bd`) for issue tracking. Issues are stored in `.beads/` and tracked in git.
+Grite stores all data in git refs (not files in the working tree). These commands are available in your environment. Always pass `--json` for machine-readable output; use `--quiet` to suppress human-readable output.
 
-### Essential Commands
+### Quick Reference
 
 ```bash
-# View ready issues (unblocked, not deferred)
-br ready              # or: bd ready
+# Find unblocked work in dependency order
+grite issue dep topo --state open --json
 
-# List and search
-br list --status=open # All open issues
-br show <id>          # Full issue details with dependencies
-br search "keyword"   # Full-text search
+# Read an issue
+grite issue show <ID> --json
 
-# Create and update
-br create --title="..." --description="..." --type=task --priority=2
-br update <id> --status=in_progress
-br close <id> --reason="Completed"
-br close <id1> <id2>  # Close multiple issues at once
+# Create an issue
+grite issue create --title "Title" --body "Description" --label todo --json
+
+# Comment and close
+grite issue comment <ID> --body "Progress update" --json
+grite issue close <ID> --json
 
 # Sync with git
-br sync --flush-only  # Export DB to JSONL
-br sync --status      # Check sync status
+grite sync --pull --json
+grite sync --push --json
 ```
 
-### Workflow Pattern
+IDs can be shortened to any unique prefix (e.g. `abc123ef` → `abc123`).
 
-1. **Start**: Run `br ready` to find actionable work
-2. **Claim**: Use `br update <id> --status=in_progress`
-3. **Work**: Implement the task
-4. **Complete**: Use `br close <id>`
-5. **Sync**: Always run `br sync --flush-only` at session end
+### Workflow
 
-### Key Concepts
+1. **Sync**: `grite sync --pull --json`
+2. **Find work**: `grite issue dep topo --state open --json` — returns unblocked issues in dependency order; start from the top
+3. **Read the issue**: `grite issue show <ID> --json`
+4. **Plan**: `grite issue comment <ID> --body "Plan: ..."` — document your approach before coding
+5. **Work**: Implement and test; use `grite issue comment <ID>` for progress checkpoints
+6. **Close**: `grite issue close <ID> --json && grite sync --push --json`
 
-- **Dependencies**: Issues can block other issues. `br ready` shows only unblocked work.
-- **Priority**: P0=critical, P1=high, P2=medium, P3=low, P4=backlog (use numbers 0-4, not words)
-- **Types**: task, bug, feature, epic, chore, docs, question
-- **Blocking**: `br dep add <issue> <depends-on>` to add dependencies
+### Issue Labels
 
-### Session Protocol
+| Label | Use |
+|-------|-----|
+| `todo` | Available work |
+| `in-progress` | Currently being worked on |
+| `blocked` | Cannot proceed (needs external input) |
+| `bug` | Something broken |
+| `feature` | New functionality |
+| `memory` | Project knowledge that should persist across sessions (discoveries, decisions, gotchas) |
 
-**Before ending any session, run this checklist:**
+### Dependencies
 
 ```bash
-git status              # Check what changed
-git add <files>         # Stage code changes
-br sync --flush-only    # Export beads changes to JSONL
-git commit -m "..."     # Commit everything
-git push                # Push to remote
+# A is blocked by B — A cannot start until B is done
+grite issue dep add <A> --target <B> --type depends_on --json
+
+# A blocks B — B cannot start until A is done
+grite issue dep add <A> --target <B> --type blocks --json
+
+# Get issues in execution order (respects all dependencies)
+grite issue dep topo --state open --json
 ```
 
-### Best Practices
+Use `dep topo` to find the right task to start—always respect the dependency graph.
 
-- Check `br ready` at session start to find available work
-- Update status as you work (in_progress → closed)
-- Create new issues with `br create` when you discover tasks
-- Use descriptive titles and set appropriate priority/type
-- Always sync before ending session
-
-<!-- end-br-agent-instructions -->
+<!-- end-grite-agent-instructions -->

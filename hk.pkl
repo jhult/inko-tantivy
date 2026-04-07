@@ -8,6 +8,9 @@ amends "package://github.com/jdx/hk/releases/download/v1.36.0/hk@1.36.0#/Config.
 import "package://github.com/jdx/hk/releases/download/v1.36.0/hk@1.36.0#/Builtins.pkl"
 
 local linters = new Mapping<String, Step> {
+    ["grite-sync"] {
+        check = "grite sync --pull --push"
+    }
     ["inko-fmt"] {
         glob = "*.inko"
         check = "inko fmt --check {{files}}"
