@@ -1293,13 +1293,14 @@ pub unsafe extern "C" fn tantivy_index_search(
         return -1;
     }
 
-    let top_docs = match searcher.search(&parsed_query, &TopDocs::with_limit(total)) {
-        Ok(docs) => docs,
-        Err(e) => {
-            *error_out = create_error_string(&format!("Search failed: {}", e));
-            return -1;
-        }
-    };
+    let top_docs =
+        match searcher.search(&parsed_query, &TopDocs::with_limit(total).order_by_score()) {
+            Ok(docs) => docs,
+            Err(e) => {
+                *error_out = create_error_string(&format!("Search failed: {}", e));
+                return -1;
+            }
+        };
 
     // Collect results, skipping offset and taking limit
     let mut results = Vec::new();
@@ -1389,7 +1390,7 @@ pub unsafe extern "C" fn tantivy_index_get_doc(
     );
 
     let searcher = wrapper.reader.searcher();
-    let top_docs = match searcher.search(&term_query, &TopDocs::with_limit(1)) {
+    let top_docs = match searcher.search(&term_query, &TopDocs::with_limit(1).order_by_score()) {
         Ok(docs) => docs,
         Err(e) => {
             *error_out = create_error_string(&format!("Get doc failed: {}", e));
@@ -1637,7 +1638,8 @@ pub unsafe extern "C" fn tantivy_index_get_docs(
             IndexRecordOption::Basic,
         );
 
-        let top_docs = match searcher.search(&term_query, &TopDocs::with_limit(1)) {
+        let top_docs = match searcher.search(&term_query, &TopDocs::with_limit(1).order_by_score())
+        {
             Ok(docs) => docs,
             Err(_) => {
                 results.push(std::ptr::null_mut());
@@ -1773,7 +1775,7 @@ pub unsafe extern "C" fn tantivy_aggregate_terms(
     let search_limit = if limit == 0 { 10000 } else { limit };
     let mut counter: std::collections::HashMap<String, u64> =
         std::collections::HashMap::with_capacity(search_limit);
-    match searcher.search(&parsed_query, &TopDocs::with_limit(search_limit)) {
+    match searcher.search(&parsed_query, &TopDocs::with_limit(search_limit).order_by_score()) {
         Ok(top_docs) => {
             for (_score, doc_address) in top_docs.iter() {
                 if let Ok(retrieved_doc) = searcher.doc::<tantivy::TantivyDocument>(*doc_address) {
@@ -1933,13 +1935,14 @@ pub unsafe extern "C" fn tantivy_autocomplete(
     }
 
     let searcher = wrapper.reader.searcher();
-    let top_docs = match searcher.search(&prefix_query, &TopDocs::with_limit(limit)) {
-        Ok(docs) => docs,
-        Err(e) => {
-            *error_out = create_error_string(&format!("Autocomplete search failed: {}", e));
-            return -1;
-        }
-    };
+    let top_docs =
+        match searcher.search(&prefix_query, &TopDocs::with_limit(limit).order_by_score()) {
+            Ok(docs) => docs,
+            Err(e) => {
+                *error_out = create_error_string(&format!("Autocomplete search failed: {}", e));
+                return -1;
+            }
+        };
 
     let mut suggestions: std::collections::HashMap<String, f32> =
         std::collections::HashMap::with_capacity(limit);
@@ -2046,7 +2049,8 @@ pub unsafe extern "C" fn tantivy_did_you_mean(
     let fuzzy_query = tantivy::query::FuzzyTermQuery::new(fuzzy_term, distance, true);
 
     let searcher = wrapper.reader.searcher();
-    let top_docs = match searcher.search(&fuzzy_query, &TopDocs::with_limit(limit)) {
+    let top_docs = match searcher.search(&fuzzy_query, &TopDocs::with_limit(limit).order_by_score())
+    {
         Ok(docs) => docs,
         Err(e) => {
             *error_out = create_error_string(&format!("Fuzzy search failed: {}", e));
