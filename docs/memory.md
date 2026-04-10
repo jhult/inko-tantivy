@@ -248,6 +248,7 @@ All buffers have size limits to prevent DoS attacks:
 | `TANTIVY_JSON_BUFFER_SIZE` | 1MB | Document JSON |
 | `TANTIVY_STRING_FIELD_BUFFER_SIZE` | 4KB | Individual string fields |
 | `TANTIVY_ERROR_BUFFER_SIZE` | 1KB | Error messages |
+| `TANTIVY_LOG_ERRORS` | (unset) | Set to `0` to suppress `[TANTIVY_ERROR]` stderr logging |
 
 ### Resource Limits
 

@@ -548,10 +548,20 @@ pub(crate) const SANITIZE_ERRORS: bool = false;
 #[cfg(not(debug_assertions))]
 pub(crate) const SANITIZE_ERRORS: bool = true;
 
+// Helper: Check if error logging is enabled via environment variable
+// Set TANTIVY_LOG_ERRORS=0 to suppress [TANTIVY_ERROR] stderr output (e.g. during tests)
+// Default is enabled (any value other than "0", or unset)
+fn error_logging_enabled() -> bool {
+    std::env::var("TANTIVY_LOG_ERRORS").as_deref() != Ok("0")
+}
+
 // Helper: Create error message C string with fallback
 pub(crate) fn create_error_string(msg: &str) -> *mut c_char {
-    // Always log full error to stderr for debugging (captured in logs/CI)
-    eprintln!("[TANTIVY_ERROR] {}", msg);
+    // Log full error to stderr for debugging (captured in logs/CI)
+    // Can be suppressed by setting TANTIVY_LOG_ERRORS=0
+    if error_logging_enabled() {
+        eprintln!("[TANTIVY_ERROR] {}", msg);
+    }
 
     // Sanitize for user-facing messages in release builds
     let user_msg = if SANITIZE_ERRORS { sanitize_error_message(msg) } else { msg.to_string() };
@@ -559,11 +569,15 @@ pub(crate) fn create_error_string(msg: &str) -> *mut c_char {
     match CString::new(user_msg.as_str()) {
         Ok(c_str) => c_str.into_raw(),
         Err(_) => {
-            eprintln!("[TANTIVY_ERROR] Failed to create error string, contained null bytes");
+            if error_logging_enabled() {
+                eprintln!("[TANTIVY_ERROR] Failed to create error string, contained null bytes");
+            }
             let cleaned = user_msg.replace('\0', "");
             CString::new(cleaned)
                 .unwrap_or_else(|_| {
-                    eprintln!("[TANTIVY_ERROR] Failed to create error string after cleaning");
+                    if error_logging_enabled() {
+                        eprintln!("[TANTIVY_ERROR] Failed to create error string after cleaning");
+                    }
                     CString::new("Error message contains invalid characters").unwrap()
                 })
                 .into_raw()

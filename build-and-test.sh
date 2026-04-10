@@ -62,6 +62,10 @@ main() {
 	echo ""
 	echo "Running Inko tests..."
 
+	# Suppress [TANTIVY_ERROR] stderr output during tests (errors are still
+	# returned to callers and asserted in tests)
+	export TANTIVY_LOG_ERRORS=0
+
 	# Set library search path for the linker
 	export LIBRARY_PATH="${SCRIPT_DIR}/native/tantivy-c/target/release:${LIBRARY_PATH:-}"
 

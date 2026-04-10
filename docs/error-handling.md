@@ -96,10 +96,11 @@ Error messages are sanitized differently based on build mode:
 - Paths replaced with `<path>` placeholder
 - Prevents path disclosure in production environments
 
-**Debug logging (always enabled):**
-- Full error messages always logged to stderr with `[TANTIVY_ERROR]` prefix
+**Debug logging (enabled by default):**
+- Full error messages logged to stderr with `[TANTIVY_ERROR]` prefix
 - Captured in CI logs and development environment
 - Not shown to end users in production
+- Can be suppressed by setting `TANTIVY_LOG_ERRORS=0` (e.g. during tests)
 
 **Example:**
 
