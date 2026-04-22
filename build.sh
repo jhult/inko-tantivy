@@ -61,7 +61,7 @@ Build and test script for inko-tantivy
 
 COMMANDS:
     build       Build the Rust FFI library (default)
-    test        Build and run tests with proper library paths
+    test        Build, check formatting, and run tests
     install     Install FFI library to ${INSTALL_DIR} (requires sudo)
     clean       Remove all build artifacts
     help        Show this help message
@@ -99,20 +99,31 @@ run_tests() {
     log_info "Building FFI library before testing..."
     build_ffi
 
-    log_info "Running tests with FFI library..."
+    log_info "Checking Inko formatting..."
     cd "${SCRIPT_DIR}"
+
+    if ! inko fmt --check; then
+        log_error "Formatting check failed"
+        return 1
+    fi
+
+    log_info "Running tests with FFI library..."
+
+    # Suppress [TANTIVY_ERROR] stderr output during tests (errors are still
+    # returned to callers and asserted in tests)
+    export TANTIVY_LOG_ERRORS=0
 
     # Set library paths for the linker and runtime
     export LIBRARY_PATH="${FFI_TARGET_DIR}"
     export DYLD_LIBRARY_PATH="${FFI_TARGET_DIR}"  # macOS
     export LD_LIBRARY_PATH="${FFI_TARGET_DIR}"    # Linux
 
-    if ! inko test; then
+    if ! inko test --release; then
         log_error "Tests failed"
         return 1
     fi
 
-    log_info "All tests passed!"
+    log_info "All checks passed!"
 }
 
 # Install library to system directory
@@ -142,7 +153,7 @@ install_lib() {
     fi
 
     log_info "Installation complete: ${INSTALL_DIR}/${LIB_NAME}"
-    log_info "You can now run 'inko test' without setting LIBRARY_PATH"
+    log_info "You can now run 'inko test --release' without setting LIBRARY_PATH"
 }
 
 # Clean build artifacts
