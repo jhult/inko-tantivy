@@ -47,11 +47,11 @@ fn pub join_strings(strings: ref Array[String], sep: String) -> String {
 # Helper: Get pointer to C array element at given index
 # Reduces repetitive pointer arithmetic in parsing loops
 fn pub c_array_element_ptr(
-  base_ptr: Pointer[UInt8],
+  base_ptr: Pointer[Uint8],
   index: Int,
   struct_size: Int,
-) -> Pointer[UInt8] {
-  ((base_ptr as Int) + (index * struct_size)) as Pointer[UInt8]
+) -> Pointer[Uint8] {
+  ((base_ptr as Int) + (index * struct_size)) as Pointer[Uint8]
 }
 
 # Get pointer to Inko string for passing to C
@@ -65,14 +65,14 @@ fn pub string_to_c_buffer(s: String) -> String {
 # Handles null pointer check and conversion
 # Takes buffer_size as parameter to allow configurable buffer sizes
 fn pub read_string_field(
-  base_ptr: Pointer[UInt8],
+  base_ptr: Pointer[Uint8],
   offset: Int,
   buffer_size: Int,
 ) -> String {
   let ptr_addr = read_usize(pointer_offset(base_ptr, offset))
 
   if ptr_addr != 0 {
-    let ptr = ptr_addr as Pointer[UInt8]
+    let ptr = ptr_addr as Pointer[Uint8]
 
     c_pointer_to_string(ptr, buffer_size)
   } else {
@@ -97,14 +97,14 @@ fn pub read_string_field(
 #
 # Takes buffer_size as parameter to allow configurable buffer sizes
 fn pub read_optional_string_field(
-  base_ptr: Pointer[UInt8],
+  base_ptr: Pointer[Uint8],
   offset: Int,
   buffer_size: Int,
 ) -> Option[String] {
   let ptr_addr = read_usize(pointer_offset(base_ptr, offset))
 
   if ptr_addr != 0 {
-    let ptr = ptr_addr as Pointer[UInt8]
+    let ptr = ptr_addr as Pointer[Uint8]
     let str = c_pointer_to_string(ptr, buffer_size)
 
     if str.size > 0 { Option.Some(str) } else { Option.None }
@@ -146,7 +146,7 @@ fn pub create_field_array(
 
 # Helper: Convert C pointer to String (reads until null terminator)
 # Optimized to avoid allocating full max_len buffer for small strings
-fn pub c_pointer_to_string(ptr: Pointer[UInt8], max_len: Int) -> String {
+fn pub c_pointer_to_string(ptr: Pointer[Uint8], max_len: Int) -> String {
   if (ptr as Int) == 0 { return '' }
 
   # First pass: count bytes until null terminator
@@ -154,7 +154,7 @@ fn pub c_pointer_to_string(ptr: Pointer[UInt8], max_len: Int) -> String {
   let mut counting = true
 
   while counting and (length < max_len) {
-    let byte_ptr = (ptr as Int + length) as Pointer[UInt8]
+    let byte_ptr = (ptr as Int + length) as Pointer[Uint8]
     let byte = byte_ptr.0
 
     if (byte as Int) == 0 { counting = false } else { length = length + 1 }
@@ -165,7 +165,7 @@ fn pub c_pointer_to_string(ptr: Pointer[UInt8], max_len: Int) -> String {
   let mut i = 0
 
   while i < length {
-    let byte_ptr = (ptr as Int + i) as Pointer[UInt8]
+    let byte_ptr = (ptr as Int + i) as Pointer[Uint8]
     let byte = byte_ptr.0
     let _ = bytes.set(i, byte as Int)
 
@@ -180,7 +180,7 @@ fn pub c_pointer_to_string(ptr: Pointer[UInt8], max_len: Int) -> String {
 # Returns (string, was_truncated) tuple for detecting buffer overflow
 # Optimized to avoid allocating full max_len buffer for small strings
 fn pub c_pointer_to_string_checked(
-  ptr: Pointer[UInt8],
+  ptr: Pointer[Uint8],
   max_len: Int,
 ) -> (String, Bool) {
   if (ptr as Int) == 0 { return ('', false) }
@@ -190,7 +190,7 @@ fn pub c_pointer_to_string_checked(
   let mut counting = true
 
   while counting and (length < max_len) {
-    let byte_ptr = (ptr as Int + length) as Pointer[UInt8]
+    let byte_ptr = (ptr as Int + length) as Pointer[Uint8]
     let byte = byte_ptr.0
 
     if (byte as Int) == 0 { counting = false } else { length = length + 1 }
@@ -204,7 +204,7 @@ fn pub c_pointer_to_string_checked(
   let mut i = 0
 
   while i < length {
-    let byte_ptr = (ptr as Int + i) as Pointer[UInt8]
+    let byte_ptr = (ptr as Int + i) as Pointer[Uint8]
     let byte = byte_ptr.0
     let _ = bytes.set(i, byte as Int)
 
@@ -216,7 +216,7 @@ fn pub c_pointer_to_string_checked(
 }
 
 # Helper: Allocate error output storage and return storage and pointer
-fn pub allocate_error_output -> (ByteArray, Pointer[UInt8]) {
+fn pub allocate_error_output -> (ByteArray, Pointer[Uint8]) {
   let error_out_storage = ByteArray.filled(with: 0, times: 8)
   let error_out_ptr = error_out_storage.pointer
 
@@ -225,7 +225,7 @@ fn pub allocate_error_output -> (ByteArray, Pointer[UInt8]) {
 
 # Helper: Allocate and initialize error output storage
 # Returns storage (for lifetime) and pointer (for FFI)
-fn pub allocate_and_init_error -> (ByteArray, Pointer[UInt8]) {
+fn pub allocate_and_init_error -> (ByteArray, Pointer[Uint8]) {
   let (storage, ptr) = allocate_error_output
 
   write_usize(ptr, 0)
@@ -234,11 +234,11 @@ fn pub allocate_and_init_error -> (ByteArray, Pointer[UInt8]) {
 
 # Helper: Check FFI error pointer and return error message if present
 # Returns Result.Ok(nil) if no error, Result.Error(message) if error occurred
-fn pub check_ffi_error(error_out_ptr: Pointer[UInt8]) -> Result[Nil, String] {
+fn pub check_ffi_error(error_out_ptr: Pointer[Uint8]) -> Result[Nil, String] {
   let error_ptr_addr = read_usize(error_out_ptr)
 
   if error_ptr_addr != 0 {
-    let error_ptr = error_ptr_addr as Pointer[UInt8]
+    let error_ptr = error_ptr_addr as Pointer[Uint8]
     let error_msg = c_pointer_to_string(error_ptr, TANTIVY_ERROR_BUFFER_SIZE)
 
     tantivy_error_free(error_ptr)

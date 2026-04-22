@@ -9,7 +9,7 @@ fn pub tests(t: mut Tests) {
   t.test(
     'c_pointer_to_string_checked: null pointer returns empty string and not truncated',
     fn (t) {
-      let null_ptr: Pointer[UInt8] = (0 as Int) as Pointer[UInt8]
+      let null_ptr: Pointer[Uint8] = (0 as Int) as Pointer[Uint8]
       let (result, truncated) = c_pointer_to_string_checked(null_ptr, 100)
 
       t.equal(result, '')

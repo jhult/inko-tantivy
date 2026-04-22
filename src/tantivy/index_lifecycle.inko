@@ -18,7 +18,7 @@ import tantivy.types (TantivyConfig)
 # Index lifecycle manager
 type pub TantivyIndexLifecycle {
   let mut @config: TantivyConfig
-  let mut @index: Option[Pointer[UInt8]]
+  let mut @index: Option[Pointer[Uint8]]
 }
 
 impl TantivyIndexLifecycle {
@@ -155,7 +155,7 @@ impl TantivyIndexLifecycle {
   }
 
   # Get the raw index pointer for FFI operations
-  fn pub index_ptr -> Option[Pointer[UInt8]] {
+  fn pub index_ptr -> Option[Pointer[Uint8]] {
     match @index {
       case Some(idx) -> Option.Some(idx)
       case None -> Option.None

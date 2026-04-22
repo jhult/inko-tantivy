@@ -21,7 +21,7 @@ import tantivy.marshal (
 
 # Add or update a document in the index
 fn pub add_doc(
-  idx: Pointer[UInt8],
+  idx: Pointer[Uint8],
   doc_id: String,
   fields: Array[(String, String)],
 ) -> Result[Bool, String] {
@@ -47,7 +47,7 @@ fn pub add_doc(
     doc_id_buf.pointer,
     fields_ptr,
     field_count as Int64,
-    error_out_ptr as Pointer[UInt8],
+    error_out_ptr as Pointer[Uint8],
   )
 
   match check_ffi_error(error_out_ptr) {
@@ -70,7 +70,7 @@ fn pub add_doc(
 
 # Add or update multiple documents in a batch (more efficient than individual add_doc calls)
 fn pub add_docs_batch(
-  idx: Pointer[UInt8],
+  idx: Pointer[Uint8],
   docs: Array[(String, Array[(String, String)])],
 ) -> Result[Int, String] {
   for (_, fields) in docs.iter {
@@ -107,7 +107,7 @@ fn pub add_docs_batch(
 
     # Write doc_id pointer to batch documents array
     write_usize(
-      ((docs_ptr as Int) + doc_offset) as Pointer[UInt8],
+      ((docs_ptr as Int) + doc_offset) as Pointer[Uint8],
       pointer_to_int(doc_id_buf.pointer),
     )
 
@@ -125,13 +125,13 @@ fn pub add_docs_batch(
 
       # Write key pointer to fields array
       write_usize(
-        ((fields_ptr as Int) + field_offset) as Pointer[UInt8],
+        ((fields_ptr as Int) + field_offset) as Pointer[Uint8],
         pointer_to_int(key_buf.pointer),
       )
 
       # Write value pointer to fields array
       write_usize(
-        ((fields_ptr as Int) + field_offset + 8) as Pointer[UInt8],
+        ((fields_ptr as Int) + field_offset + 8) as Pointer[Uint8],
         pointer_to_int(value_buf.pointer),
       )
 
@@ -143,12 +143,12 @@ fn pub add_docs_batch(
 
     # Write fields pointer (at this document's starting offset) and count
     write_usize(
-      ((docs_ptr as Int) + doc_offset + 8) as Pointer[UInt8],
+      ((docs_ptr as Int) + doc_offset + 8) as Pointer[Uint8],
       ((fields_ptr as Int) + doc_fields_start) as Int,
     )
 
     write_usize(
-      ((docs_ptr as Int) + doc_offset + 16) as Pointer[UInt8],
+      ((docs_ptr as Int) + doc_offset + 16) as Pointer[Uint8],
       num_fields as Int,
     )
 
@@ -183,7 +183,7 @@ fn pub add_docs_batch(
 }
 
 # Delete a document from the index
-fn pub delete_doc(idx: Pointer[UInt8], doc_id: String) -> Result[Bool, String] {
+fn pub delete_doc(idx: Pointer[Uint8], doc_id: String) -> Result[Bool, String] {
   # Convert doc_id to C string
   let doc_id_buf = string_to_c_buffer(doc_id)
 
@@ -215,7 +215,7 @@ fn pub delete_doc(idx: Pointer[UInt8], doc_id: String) -> Result[Bool, String] {
 # still calls delete_term for each document internally, but this reduces
 # FFI round-trips compared to calling delete_doc for each document.
 fn pub delete_documents(
-  idx: Pointer[UInt8],
+  idx: Pointer[Uint8],
   doc_ids: Array[String],
 ) -> Result[Int, String] {
   # Get array size before moving
@@ -253,7 +253,7 @@ fn pub delete_documents(
 
 # Delete documents by account and folder (for IMAP sync)
 fn pub delete_by_account_folder(
-  idx: Pointer[UInt8],
+  idx: Pointer[Uint8],
   account_id: String,
   folder_name: String,
   uids: Array[Int],

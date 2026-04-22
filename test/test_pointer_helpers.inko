@@ -104,7 +104,7 @@ fn pub tests(t: mut Tests) {
   })
 
   t.test('is_null returns true for null pointer', fn (t) {
-    let null_ptr: Pointer[UInt8] = (0 as Int) as Pointer[UInt8]
+    let null_ptr: Pointer[Uint8] = (0 as Int) as Pointer[Uint8]
 
     t.true(is_null(null_ptr))
   })

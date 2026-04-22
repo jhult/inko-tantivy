@@ -35,7 +35,7 @@ import tantivy.types (
 
 # Search the index
 fn pub search(
-  idx: Pointer[UInt8],
+  idx: Pointer[Uint8],
   string_buffer_size: Int,
   query: String,
   limit: Int,
@@ -83,9 +83,9 @@ fn pub search(
     query_buf.pointer,
     limit as Int64,
     offset as Int64,
-    results_out_ptr as Pointer[UInt8],
-    num_results_out_ptr as Pointer[UInt64],
-    error_out_ptr as Pointer[UInt8],
+    results_out_ptr as Pointer[Uint8],
+    num_results_out_ptr as Pointer[Uint64],
+    error_out_ptr as Pointer[Uint8],
   )
 
   match check_ffi_error(error_out_ptr) {
@@ -110,7 +110,7 @@ fn pub search(
   let mut results = []
 
   if results_ptr_addr != 0 and num_results > 0 {
-    let results_ptr = results_ptr_addr as Pointer[UInt8]
+    let results_ptr = results_ptr_addr as Pointer[Uint8]
 
     let mut i = 0
 
@@ -141,7 +141,7 @@ fn pub search(
 
   # Free results array
   if results_ptr_addr != 0 and num_results > 0 {
-    let results_ptr = results_ptr_addr as Pointer[UInt8]
+    let results_ptr = results_ptr_addr as Pointer[Uint8]
 
     tantivy_result_free(results_ptr, num_results as Int64)
   }
@@ -152,7 +152,7 @@ fn pub search(
 # Get a document by its ID
 # Returns a JSON string with all document fields, or error if not found
 fn pub get_doc(
-  idx: Pointer[UInt8],
+  idx: Pointer[Uint8],
   json_buffer_size: Int,
   doc_id: String,
 ) -> Result[String, String] {
@@ -196,7 +196,7 @@ fn pub get_doc(
 # Returns an array of JSON strings with all document fields
 # Missing documents are represented as empty strings in the array
 fn pub get_docs(
-  idx: Pointer[UInt8],
+  idx: Pointer[Uint8],
   json_buffer_size: Int,
   doc_ids: Array[String],
 ) -> Result[Array[String], String] {
@@ -237,7 +237,7 @@ fn pub get_docs(
     idx,
     ids_array_buf.pointer,
     num_ids as Int64,
-    num_results_out_ptr as Pointer[UInt64],
+    num_results_out_ptr as Pointer[Uint64],
     error_out_ptr,
   )
 
@@ -267,8 +267,8 @@ fn pub get_docs(
           while j < num_results {
             # Read the pointer value stored at position j in the results array
             let slot_addr = (results_ptr as Int) + (j * PTR_SIZE)
-            let doc_ptr = read_usize(slot_addr as Pointer[UInt8])
-              as Pointer[UInt8]
+            let doc_ptr = read_usize(slot_addr as Pointer[Uint8])
+              as Pointer[Uint8]
 
             let doc_json = if (doc_ptr as Int) != 0 {
               let (json_str, truncated) = c_pointer_to_string_checked(
@@ -303,7 +303,7 @@ fn pub get_docs(
 # Perform a terms aggregation (count documents by field values)
 # Returns results sorted by count (descending)
 fn pub aggregate_terms(
-  idx: Pointer[UInt8],
+  idx: Pointer[Uint8],
   string_buffer_size: Int,
   field_name: String,
   query: String,
@@ -343,9 +343,9 @@ fn pub aggregate_terms(
     field_buf.pointer,
     query_buf.pointer,
     limit as Int64,
-    results_out_ptr as Pointer[UInt8],
-    num_results_out_ptr as Pointer[UInt64],
-    error_out_ptr as Pointer[UInt8],
+    results_out_ptr as Pointer[Uint8],
+    num_results_out_ptr as Pointer[Uint64],
+    error_out_ptr as Pointer[Uint8],
   )
 
   match check_ffi_error(error_out_ptr) {
@@ -365,7 +365,7 @@ fn pub aggregate_terms(
   let mut results = []
 
   if results_ptr_addr != 0 and num_results > 0 {
-    let results_ptr = results_ptr_addr as Pointer[UInt8]
+    let results_ptr = results_ptr_addr as Pointer[Uint8]
 
     let mut j = 0
 
@@ -378,7 +378,7 @@ fn pub aggregate_terms(
         string_buffer_size,
       )
       let count_ptr = pointer_offset(base_ptr, AGGREGATION_OFFSET_COUNT)
-        as Pointer[UInt64]
+        as Pointer[Uint64]
       let count = count_ptr.0 as Int
 
       results.push(TantivyAggregationResult(key: key, count: count))
@@ -395,7 +395,7 @@ fn pub aggregate_terms(
 # Get facet counts for a field (uses default limit of 1000)
 # For custom limits, use aggregate_terms() directly
 fn pub get_facet_counts(
-  idx: Pointer[UInt8],
+  idx: Pointer[Uint8],
   string_buffer_size: Int,
   field_name: String,
   query: String,
@@ -405,7 +405,7 @@ fn pub get_facet_counts(
 
 # Autocomplete: Get suggestions for a prefix query
 fn pub autocomplete(
-  idx: Pointer[UInt8],
+  idx: Pointer[Uint8],
   string_buffer_size: Int,
   field: String,
   prefix: String,
@@ -445,9 +445,9 @@ fn pub autocomplete(
     field_buf.pointer,
     prefix_buf.pointer,
     limit as Int64,
-    results_out_ptr as Pointer[UInt8],
-    num_results_out_ptr as Pointer[UInt64],
-    error_out_ptr as Pointer[UInt8],
+    results_out_ptr as Pointer[Uint8],
+    num_results_out_ptr as Pointer[Uint64],
+    error_out_ptr as Pointer[Uint8],
   )
 
   match check_ffi_error(error_out_ptr) {
@@ -467,7 +467,7 @@ fn pub autocomplete(
   let mut results = []
 
   if results_ptr_addr != 0 and num_results > 0 {
-    let results_ptr = results_ptr_addr as Pointer[UInt8]
+    let results_ptr = results_ptr_addr as Pointer[Uint8]
 
     let mut j = 0
 
@@ -497,7 +497,7 @@ fn pub autocomplete(
 # Did-you-mean: Get similar terms using fuzzy query
 # distance: edit distance (0-2 typical)
 fn pub did_you_mean(
-  idx: Pointer[UInt8],
+  idx: Pointer[Uint8],
   string_buffer_size: Int,
   field: String,
   term: String,
@@ -544,9 +544,9 @@ fn pub did_you_mean(
     term_buf.pointer,
     distance as Int32,
     limit as Int64,
-    results_out_ptr as Pointer[UInt8],
-    num_results_out_ptr as Pointer[UInt64],
-    error_out_ptr as Pointer[UInt8],
+    results_out_ptr as Pointer[Uint8],
+    num_results_out_ptr as Pointer[Uint64],
+    error_out_ptr as Pointer[Uint8],
   )
 
   match check_ffi_error(error_out_ptr) {
@@ -566,7 +566,7 @@ fn pub did_you_mean(
   let mut results = []
 
   if results_ptr_addr != 0 and num_results > 0 {
-    let results_ptr = results_ptr_addr as Pointer[UInt8]
+    let results_ptr = results_ptr_addr as Pointer[Uint8]
 
     let mut j = 0
 

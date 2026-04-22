@@ -27,20 +27,20 @@
 # Link the FFI library to get Pointer type
 import extern "tantivy_c"
 
-# Convert Pointer[UInt8] to Int address
-fn pub pointer_to_int(ptr: Pointer[UInt8]) -> Int {
+# Convert Pointer[Uint8] to Int address
+fn pub pointer_to_int(ptr: Pointer[Uint8]) -> Int {
   ptr as Int
 }
 
 # Pointer arithmetic: add offset bytes to pointer
 # In Inko 0.19.1, you must cast to Int, add offset, then cast back
-fn pub pointer_offset(ptr: Pointer[UInt8], offset: Int) -> Pointer[UInt8] {
-  ((ptr as Int) + offset) as Pointer[UInt8]
+fn pub pointer_offset(ptr: Pointer[Uint8], offset: Int) -> Pointer[Uint8] {
+  ((ptr as Int) + offset) as Pointer[Uint8]
 }
 
 # Write a usize (64-bit integer) to memory at pointer location
 # Uses little-endian byte order
-fn pub write_usize(ptr: Pointer[UInt8], value: Int) {
+fn pub write_usize(ptr: Pointer[Uint8], value: Int) {
   # Check alignment for 64-bit access
   if !is_aligned_to(ptr, 8) {
     let ptr_int = pointer_to_int(ptr)
@@ -51,33 +51,33 @@ fn pub write_usize(ptr: Pointer[UInt8], value: Int) {
     )
   }
 
-  # Use Int for bitwise operations (UInt64 doesn't support bitwise ops in Inko)
+  # Use Int for bitwise operations (Uint64 doesn't support bitwise ops in Inko)
   let v = value
 
   # Extract each byte using bitwise operations
-  let byte0 = (v & 0xFF) as UInt8
-  let byte1 = ((v >> 8) & 0xFF) as UInt8
-  let byte2 = ((v >> 16) & 0xFF) as UInt8
-  let byte3 = ((v >> 24) & 0xFF) as UInt8
-  let byte4 = ((v >> 32) & 0xFF) as UInt8
-  let byte5 = ((v >> 40) & 0xFF) as UInt8
-  let byte6 = ((v >> 48) & 0xFF) as UInt8
-  let byte7 = ((v >> 56) & 0xFF) as UInt8
+  let byte0 = (v & 0xFF) as Uint8
+  let byte1 = ((v >> 8) & 0xFF) as Uint8
+  let byte2 = ((v >> 16) & 0xFF) as Uint8
+  let byte3 = ((v >> 24) & 0xFF) as Uint8
+  let byte4 = ((v >> 32) & 0xFF) as Uint8
+  let byte5 = ((v >> 40) & 0xFF) as Uint8
+  let byte6 = ((v >> 48) & 0xFF) as Uint8
+  let byte7 = ((v >> 56) & 0xFF) as Uint8
 
   # Write bytes to memory using pointer arithmetic and dereferencing
-  (((ptr as Int) + 0) as Pointer[UInt8]).0 = byte0
-  (((ptr as Int) + 1) as Pointer[UInt8]).0 = byte1
-  (((ptr as Int) + 2) as Pointer[UInt8]).0 = byte2
-  (((ptr as Int) + 3) as Pointer[UInt8]).0 = byte3
-  (((ptr as Int) + 4) as Pointer[UInt8]).0 = byte4
-  (((ptr as Int) + 5) as Pointer[UInt8]).0 = byte5
-  (((ptr as Int) + 6) as Pointer[UInt8]).0 = byte6
-  (((ptr as Int) + 7) as Pointer[UInt8]).0 = byte7
+  (((ptr as Int) + 0) as Pointer[Uint8]).0 = byte0
+  (((ptr as Int) + 1) as Pointer[Uint8]).0 = byte1
+  (((ptr as Int) + 2) as Pointer[Uint8]).0 = byte2
+  (((ptr as Int) + 3) as Pointer[Uint8]).0 = byte3
+  (((ptr as Int) + 4) as Pointer[Uint8]).0 = byte4
+  (((ptr as Int) + 5) as Pointer[Uint8]).0 = byte5
+  (((ptr as Int) + 6) as Pointer[Uint8]).0 = byte6
+  (((ptr as Int) + 7) as Pointer[Uint8]).0 = byte7
 }
 
 # Read a usize (64-bit integer) from memory at pointer location
 # Uses little-endian byte order
-fn pub read_usize(ptr: Pointer[UInt8]) -> Int {
+fn pub read_usize(ptr: Pointer[Uint8]) -> Int {
   # Check alignment for 64-bit access
   if !is_aligned_to(ptr, 8) {
     let ptr_int = pointer_to_int(ptr)
@@ -89,14 +89,14 @@ fn pub read_usize(ptr: Pointer[UInt8]) -> Int {
   }
 
   # Read 8 bytes and combine them into a 64-bit integer
-  let byte0 = (((ptr as Int) + 0) as Pointer[UInt8]).0 as Int
-  let byte1 = (((ptr as Int) + 1) as Pointer[UInt8]).0 as Int
-  let byte2 = (((ptr as Int) + 2) as Pointer[UInt8]).0 as Int
-  let byte3 = (((ptr as Int) + 3) as Pointer[UInt8]).0 as Int
-  let byte4 = (((ptr as Int) + 4) as Pointer[UInt8]).0 as Int
-  let byte5 = (((ptr as Int) + 5) as Pointer[UInt8]).0 as Int
-  let byte6 = (((ptr as Int) + 6) as Pointer[UInt8]).0 as Int
-  let byte7 = (((ptr as Int) + 7) as Pointer[UInt8]).0 as Int
+  let byte0 = (((ptr as Int) + 0) as Pointer[Uint8]).0 as Int
+  let byte1 = (((ptr as Int) + 1) as Pointer[Uint8]).0 as Int
+  let byte2 = (((ptr as Int) + 2) as Pointer[Uint8]).0 as Int
+  let byte3 = (((ptr as Int) + 3) as Pointer[Uint8]).0 as Int
+  let byte4 = (((ptr as Int) + 4) as Pointer[Uint8]).0 as Int
+  let byte5 = (((ptr as Int) + 5) as Pointer[Uint8]).0 as Int
+  let byte6 = (((ptr as Int) + 6) as Pointer[Uint8]).0 as Int
+  let byte7 = (((ptr as Int) + 7) as Pointer[Uint8]).0 as Int
 
   # Combine bytes into 64-bit integer (little-endian)
   byte0
@@ -110,12 +110,12 @@ fn pub read_usize(ptr: Pointer[UInt8]) -> Int {
 }
 
 # Check if pointer is null (address 0)
-fn pub is_null(ptr: Pointer[UInt8]) -> Bool {
+fn pub is_null(ptr: Pointer[Uint8]) -> Bool {
   (ptr as Int) == 0
 }
 
 # Check if pointer is aligned to specified byte boundary
 # Useful for verifying FFI struct field offsets before access
-fn pub is_aligned_to(ptr: Pointer[UInt8], alignment: Int) -> Bool {
+fn pub is_aligned_to(ptr: Pointer[Uint8], alignment: Int) -> Bool {
   ((ptr as Int) & (alignment - 1)) == 0
 }

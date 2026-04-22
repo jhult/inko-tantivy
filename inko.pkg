@@ -1,4 +1,4 @@
 # inko-tantivy
 #
 # Tantivy FFI bindings for full-text search in Inko
-require inko 0.19.1
+require inko 0.20.0

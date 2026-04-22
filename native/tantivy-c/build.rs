@@ -131,15 +131,15 @@ fn generate_ffi_constants(output_path: &PathBuf) {
     generate_ffi_function(
         &mut output,
         "tantivy_index_open",
-        &[("config", "Pointer[UInt8]"), ("error_out", "Pointer[UInt8]")],
-        "Pointer[UInt8]",
+        &[("config", "Pointer[Uint8]"), ("error_out", "Pointer[Uint8]")],
+        "Pointer[Uint8]",
         "",
     );
 
     generate_ffi_function(
         &mut output,
         "tantivy_index_close",
-        &[("index", "Pointer[UInt8]"), ("error_out", "Pointer[UInt8]")],
+        &[("index", "Pointer[Uint8]"), ("error_out", "Pointer[Uint8]")],
         "Int32",
         "",
     );
@@ -148,11 +148,11 @@ fn generate_ffi_constants(output_path: &PathBuf) {
         &mut output,
         "tantivy_index_add_doc",
         &[
-            ("index", "Pointer[UInt8]"),
-            ("doc_id", "Pointer[UInt8]"),
-            ("fields", "Pointer[UInt8]"),
+            ("index", "Pointer[Uint8]"),
+            ("doc_id", "Pointer[Uint8]"),
+            ("fields", "Pointer[Uint8]"),
             ("num_fields", "Int64"),
-            ("error_out", "Pointer[UInt8]"),
+            ("error_out", "Pointer[Uint8]"),
         ],
         "Int32",
         "",
@@ -162,10 +162,10 @@ fn generate_ffi_constants(output_path: &PathBuf) {
         &mut output,
         "tantivy_index_add_docs_batch",
         &[
-            ("index", "Pointer[UInt8]"),
-            ("documents", "Pointer[UInt8]"),
+            ("index", "Pointer[Uint8]"),
+            ("documents", "Pointer[Uint8]"),
             ("num_docs", "Int64"),
-            ("error_out", "Pointer[UInt8]"),
+            ("error_out", "Pointer[Uint8]"),
         ],
         "Int32",
         "",
@@ -175,9 +175,9 @@ fn generate_ffi_constants(output_path: &PathBuf) {
         &mut output,
         "tantivy_index_delete_doc",
         &[
-            ("index", "Pointer[UInt8]"),
-            ("doc_id", "Pointer[UInt8]"),
-            ("error_out", "Pointer[UInt8]"),
+            ("index", "Pointer[Uint8]"),
+            ("doc_id", "Pointer[Uint8]"),
+            ("error_out", "Pointer[Uint8]"),
         ],
         "Int32",
         "",
@@ -187,10 +187,10 @@ fn generate_ffi_constants(output_path: &PathBuf) {
         &mut output,
         "tantivy_index_delete_docs",
         &[
-            ("index", "Pointer[UInt8]"),
-            ("doc_ids", "Pointer[UInt8]"),
+            ("index", "Pointer[Uint8]"),
+            ("doc_ids", "Pointer[Uint8]"),
             ("num_ids", "Int64"),
-            ("error_out", "Pointer[UInt8]"),
+            ("error_out", "Pointer[Uint8]"),
         ],
         "Int32",
         "",
@@ -200,13 +200,13 @@ fn generate_ffi_constants(output_path: &PathBuf) {
         &mut output,
         "tantivy_index_search",
         &[
-            ("index", "Pointer[UInt8]"),
-            ("query", "Pointer[UInt8]"),
+            ("index", "Pointer[Uint8]"),
+            ("query", "Pointer[Uint8]"),
             ("limit", "Int64"),
             ("offset", "Int64"),
-            ("results_out", "Pointer[UInt8]"),
-            ("num_results_out", "Pointer[UInt64]"),
-            ("error_out", "Pointer[UInt8]"),
+            ("results_out", "Pointer[Uint8]"),
+            ("num_results_out", "Pointer[Uint64]"),
+            ("error_out", "Pointer[Uint8]"),
         ],
         "Int32",
         "",
@@ -215,7 +215,7 @@ fn generate_ffi_constants(output_path: &PathBuf) {
     generate_ffi_function(
         &mut output,
         "tantivy_index_commit",
-        &[("index", "Pointer[UInt8]"), ("error_out", "Pointer[UInt8]")],
+        &[("index", "Pointer[Uint8]"), ("error_out", "Pointer[Uint8]")],
         "Int32",
         "",
     );
@@ -223,7 +223,7 @@ fn generate_ffi_constants(output_path: &PathBuf) {
     generate_ffi_function(
         &mut output,
         "tantivy_index_rollback",
-        &[("index", "Pointer[UInt8]"), ("error_out", "Pointer[UInt8]")],
+        &[("index", "Pointer[Uint8]"), ("error_out", "Pointer[Uint8]")],
         "Int32",
         "",
     );
@@ -231,7 +231,7 @@ fn generate_ffi_constants(output_path: &PathBuf) {
     generate_ffi_function(
         &mut output,
         "tantivy_result_free",
-        &[("results", "Pointer[UInt8]"), ("num_results", "Int64")],
+        &[("results", "Pointer[Uint8]"), ("num_results", "Int64")],
         "",
         "",
     );
@@ -239,7 +239,7 @@ fn generate_ffi_constants(output_path: &PathBuf) {
     generate_ffi_function(
         &mut output,
         "tantivy_error_free",
-        &[("error", "Pointer[UInt8]")],
+        &[("error", "Pointer[Uint8]")],
         "",
         "",
     );
@@ -248,34 +248,34 @@ fn generate_ffi_constants(output_path: &PathBuf) {
         &mut output,
         "tantivy_index_get_doc",
         &[
-            ("index", "Pointer[UInt8]"),
-            ("doc_id", "Pointer[UInt8]"),
-            ("error_out", "Pointer[UInt8]"),
+            ("index", "Pointer[Uint8]"),
+            ("doc_id", "Pointer[Uint8]"),
+            ("error_out", "Pointer[Uint8]"),
         ],
-        "Pointer[UInt8]",
+        "Pointer[Uint8]",
         "",
     );
 
-    generate_ffi_function(&mut output, "tantivy_string_free", &[("s", "Pointer[UInt8]")], "", "");
+    generate_ffi_function(&mut output, "tantivy_string_free", &[("s", "Pointer[Uint8]")], "", "");
 
     generate_ffi_function(
         &mut output,
         "tantivy_index_get_docs",
         &[
-            ("index", "Pointer[UInt8]"),
-            ("doc_ids", "Pointer[UInt8]"),
+            ("index", "Pointer[Uint8]"),
+            ("doc_ids", "Pointer[Uint8]"),
             ("num_ids", "Int64"),
-            ("num_results_out", "Pointer[UInt64]"),
-            ("error_out", "Pointer[UInt8]"),
+            ("num_results_out", "Pointer[Uint64]"),
+            ("error_out", "Pointer[Uint8]"),
         ],
-        "Pointer[UInt8]",
+        "Pointer[Uint8]",
         "",
     );
 
     generate_ffi_function(
         &mut output,
         "tantivy_docs_array_free",
-        &[("docs", "Pointer[UInt8]"), ("num_docs", "Int64")],
+        &[("docs", "Pointer[Uint8]"), ("num_docs", "Int64")],
         "",
         "",
     );
@@ -284,13 +284,13 @@ fn generate_ffi_constants(output_path: &PathBuf) {
         &mut output,
         "tantivy_aggregate_terms",
         &[
-            ("index", "Pointer[UInt8]"),
-            ("field_name", "Pointer[UInt8]"),
-            ("query", "Pointer[UInt8]"),
+            ("index", "Pointer[Uint8]"),
+            ("field_name", "Pointer[Uint8]"),
+            ("query", "Pointer[Uint8]"),
             ("limit", "Int64"),
-            ("results_out", "Pointer[UInt8]"),
-            ("num_results_out", "Pointer[UInt64]"),
-            ("error_out", "Pointer[UInt8]"),
+            ("results_out", "Pointer[Uint8]"),
+            ("num_results_out", "Pointer[Uint64]"),
+            ("error_out", "Pointer[Uint8]"),
         ],
         "Int32",
         "",
@@ -299,7 +299,7 @@ fn generate_ffi_constants(output_path: &PathBuf) {
     generate_ffi_function(
         &mut output,
         "tantivy_aggregation_results_free",
-        &[("results", "Pointer[UInt8]"), ("num_results", "Int64")],
+        &[("results", "Pointer[Uint8]"), ("num_results", "Int64")],
         "",
         "",
     );
@@ -308,13 +308,13 @@ fn generate_ffi_constants(output_path: &PathBuf) {
         &mut output,
         "tantivy_autocomplete",
         &[
-            ("index", "Pointer[UInt8]"),
-            ("field", "Pointer[UInt8]"),
-            ("prefix", "Pointer[UInt8]"),
+            ("index", "Pointer[Uint8]"),
+            ("field", "Pointer[Uint8]"),
+            ("prefix", "Pointer[Uint8]"),
             ("limit", "Int64"),
-            ("results_out", "Pointer[UInt8]"),
-            ("num_results_out", "Pointer[UInt64]"),
-            ("error_out", "Pointer[UInt8]"),
+            ("results_out", "Pointer[Uint8]"),
+            ("num_results_out", "Pointer[Uint64]"),
+            ("error_out", "Pointer[Uint8]"),
         ],
         "Int32",
         "",
@@ -324,14 +324,14 @@ fn generate_ffi_constants(output_path: &PathBuf) {
         &mut output,
         "tantivy_did_you_mean",
         &[
-            ("index", "Pointer[UInt8]"),
-            ("field", "Pointer[UInt8]"),
-            ("term", "Pointer[UInt8]"),
+            ("index", "Pointer[Uint8]"),
+            ("field", "Pointer[Uint8]"),
+            ("term", "Pointer[Uint8]"),
             ("distance", "Int32"),
             ("limit", "Int64"),
-            ("results_out", "Pointer[UInt8]"),
-            ("num_results_out", "Pointer[UInt64]"),
-            ("error_out", "Pointer[UInt8]"),
+            ("results_out", "Pointer[Uint8]"),
+            ("num_results_out", "Pointer[Uint64]"),
+            ("error_out", "Pointer[Uint8]"),
         ],
         "Int32",
         "",
@@ -340,7 +340,7 @@ fn generate_ffi_constants(output_path: &PathBuf) {
     generate_ffi_function(
         &mut output,
         "tantivy_suggestions_free",
-        &[("results", "Pointer[UInt8]"), ("num_results", "Int64")],
+        &[("results", "Pointer[Uint8]"), ("num_results", "Int64")],
         "",
         "",
     );
